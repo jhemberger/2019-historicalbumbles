@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+plot*.png
+Ag_Plots_Yearly
+2018_GBIF_Bumbles.csv
+2018_HistoricalAg_Pop.csv
+counties.csv
+*.eps
+NO_DELETE_OGDATA
+USCounties_Shapefile
+2016*
+.DS*

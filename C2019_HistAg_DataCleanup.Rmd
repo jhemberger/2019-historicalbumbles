@@ -1,0 +1,160 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Historical ag census data cleanup & prep"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+## Import libraries
+```{r}
+library(tidyverse)
+library(maptools)
+library(maps)
+library(raster)
+library(ggmap)
+library(gridExtra)
+devtools::install_github('thomasp85/gganimate')
+library(gganimate)
+library(transformr)
+```
+
+## Clean up ag census data
+### Load in raw data
+```{r}
+histag <- read_csv("./2018_HistoricalAg_Pop.csv",
+                   col_names = TRUE,
+                   na = "NA")
+```
+
+#### Split into ag-only data
+```{r}
+histag.ag <- histag %>%
+  dplyr::select(-contains("POP")) %>%
+  gather(key = ag_stat_name,
+         value = ag_stat_value,
+         contains("IFC"))
+```
+
+#### Split into pop-only data
+```{r}
+histag.pop <- histag %>%
+  dplyr::select(-contains("IFC")) %>%
+  gather(key = pop_period,
+         value = pop,
+         contains("POP"))
+```
+
+#### Parse out date, ag statistics from histag.ag
+```{r}
+histag.ag <- histag.ag %>%
+  mutate(year = str_extract(ag_stat_name, "[:digit:]{4}"),
+         stat = str_extract(ag_stat_name, "(?<=[:digit:]{4})[:alnum:]+"))
+histag.ag$stat[histag.ag$stat == "R"] <- "RATIO"
+```
+
+#### Save HistAg data
+```{r}
+write_csv(histag.ag,
+          "./histag_clean.csv")
+```
+
+
+Quick plot of temporal trends
+
+```{r}
+us.county.50 <- read_csv("./counties.csv")
+us.county.48 <- us.county.50 %>%
+  filter(region != "alaska" & region != "hawaii")
+rm(us.county.50)
+us.county.48$region <- str_to_title(us.county.48$region)
+us.county.48$subregion <- str_to_title(us.county.48$subregion)
+names(us.county.48)[names(us.county.48) == 'subregion'] <- 'CNTY_NAME'
+
+histag.plot.df <- left_join(us.county.48, 
+                            histag.ag,
+                            by = "CNTY_NAME")
+
+base.us.state <- ggplot(data = us.county.48, 
+                        mapping = aes(x = long,
+                                      y = lat, 
+                                      group = group)) + 
+  coord_map("stereographic") + 
+  geom_polygon(fill = "transparent",
+               color = "gray80",
+               size = 0.25) + 
+  theme_minimal()
+base.us.state
+
+# histag.plot.df <- histag.plot.df %>%
+  # filter(stat == "M2")
+
+# ag.county <- base.us.state + 
+  # geom_polygon(data = histag.plot.df, aes(fill = ag_stat_value))
+
+# ag.county + facet_grid(rows = vars(year))
+```
+
+For loop plot of all ag maps
+```{r}
+ag.plots <- function() {
+  years <- unique(histag.plot.df$year)
+  plot.ls <- list()
+  for (i in years) {
+      plot.df <- histag.plot.df %>%
+        filter(stat == "RATIO") %>%
+        filter(year == i)
+      plot <- base.us.state + 
+        scale_fill_distiller(palette = "Oranges",
+                             direction = 1,
+                             limits = c(0,1),
+                             na.value = "transparent",
+                             name = "Cropland:County Area") + 
+        geom_polygon(data = plot.df,
+                     mapping = aes(fill = ag_stat_value)) + 
+        labs(title = "Cropland : Total County Area",
+             subtitle = i) + 
+        theme(plot.title = element_text(hjust = 0.5),
+              plot.subtitle = element_text(hjust = 0.5))
+      plot.ls[[i]] <- plot
+  }
+  assign("ag.plots",
+         plot.ls,
+         envir = .GlobalEnv)
+}
+ag.plots()
+```
+
+Export all `ag.plots` to image, combine externally to gif (due to gganimate memory restrictions)
+
+```{r}
+export.plots <- function() {
+  for (i in 1:length(ag.plots)) {
+  ggsave(filename = paste("plot", 
+                          names(ag.plots[i]), 
+                          ".png", 
+                          sep = ""),
+         plot = ag.plots[[i]])
+    }
+}
+export.plots()
+```
+
+
+```{r}
+histag.ag.test <- histag.plot.df %>%
+  filter(stat == "RATIO")
+histag.ag.test$year <- as.numeric(histag.ag.test$year)
+base.us.state +
+  geom_polygon(data = histag.ag.test,
+               mapping = aes(fill = ag_stat_value)) + 
+  scale_fill_distiller(palette = "Greens", 
+                       direction = 1) + 
+  labs(title = "Year: {frame_time}") + 
+  transition_time(year) + 
+  ease_aes("linear")
+```
+

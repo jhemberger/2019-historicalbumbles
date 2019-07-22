@@ -1,0 +1,83 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Historical bumble bee data combination and modeling"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# Import packages
+```{r} 
+library(tidyverse)
+library(directlabels)
+library(rgdal)
+library(ggmap)
+library(ggalt)
+library(raster)
+library(maptools)
+library(maps)
+library(mapdata)
+library(mp)
+library(vegan)
+library(iNEXT)
+library(magrittr)
+library(openintro)
+library(lme4)
+library(lmerTest)
+library(rbin)
+```
+
+# Import data
+`bumbles.df` data are cleaned in `C2019_HistBumble_DataCleanup.rmd`.  Briefly, data from GBIF and Bumblebee Watch are combined, cleaned, filtered, and restricted to upper Midwest states.  
+
+`histag.df` data are cleaned and prepped in `C2019_HistAg_DataCleanup.Rmd`.  Not much done other than filtering out population data.
+```{r}
+bumbles.df <- read_csv("./analysis_bumbles.csv")
+histag.df <- read_csv("./histag_clean.csv")
+```
+
+# Data preparation 
+## Split bumble bee data by quantile (equal records per period)
+```{r}
+bumbles.df <- bumbles.df %>%
+  filter(!is.na(year))
+bin8.bumbles.df <- rbin_quantiles(data = bumbles.df, 
+                                  response = species,
+                                  predictor = year,
+                                  bins = 8)
+bin8.bumbles.df
+```
+Break points are: 
+**Bin 1: 1900 - 1923**
+**Bin 2: 1924 - 1946**
+**Bin 3: 1947 - 1962**
+**Bin 4: 1963 - 1968**
+**Bin 5: 1969 - 1972**
+**Bin 6: 1973 - 1993**
+**Bin 7: 1994 - 2013**
+**Bin 8: 2014 - 2018**
+
+```{r}
+bumbles.bin.df <- bumbles.df %>%
+  mutate(bin = case_when(
+    year < 1924 ~ "1900-1923",
+    between(year, 1924, 1946) ~ "1924-1946",
+    between(year, 1947, 1962) ~ "1947-1962",
+    between(year, 1963, 1968) ~ "1963-1968",
+    between(year, 1969, 1972) ~ "1969-1972",
+    between(year, 1973, 1993) ~ "1973-1993",
+    between(year, 1994, 2013) ~ "1994-2013",
+    between(year, 2014, 2019) ~ "2013-present"
+  ))
+table(bumbles.bin.df$bin)
+```
+
+## Rarefied species richness per bin
+Per Bartomeus et al. (2013) PNAS paper.  Rarefy to 80% of number of specimens in smallest bin.  Smallest bin = 1963-1968 @ 2621 * 0.8 = *2097 specimens*
+```{r}
+
+```
+

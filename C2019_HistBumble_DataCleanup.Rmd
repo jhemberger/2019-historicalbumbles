@@ -729,12 +729,6 @@ analysis.bumbles.df %>%
 # Plot change in relative abundance over time
 ## Calculate relative abundance by time period
 ```{r}
-total.abun.by.period.df <- analysis.bumbles.spsum.df %>%
-  ungroup() %>%
-  group_by(time_period) %>%
-  summarise(total_bumbles = sum(n.bumbles))
-total.abun.by.period.df
-
 spp.abun.by.period.df <- analysis.bumbles.spsum.df %>%
   ungroup() %>%
   group_by(time_period, species) %>%

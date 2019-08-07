@@ -12,7 +12,6 @@ output: html_notebook
 # Import packages
 ```{r} 
 library(tidyverse)
-library(directlabels)
 library(rgdal)
 library(ggmap)
 library(ggalt)
@@ -27,6 +26,7 @@ library(magrittr)
 library(openintro)
 library(lme4)
 library(lmerTest)
+library(coin)
 library(rbin)
 ```
 
@@ -43,27 +43,42 @@ histag.df <- read_csv("./histag_clean.csv")
 ## Split bumble bee data by quantile (equal records per period)
 ```{r}
 bumbles.df <- bumbles.df %>%
-  filter(!is.na(year))
+  filter(!is.na(year)) %>%
+  mutate(subgenus = ifelse(species %in% c("Bombus affinis",
+                                          "Bombus terricola"),
+                           "Bombus",
+                           ifelse(species %in% c("Bombus griseocollis",
+                                                 "Bombus rufocinctus",
+                                                 "Bombus fraternus"),
+                                  "Cullumanobombus",
+                                  ifelse(species %in% c("Bombus vagans",
+                                                        "Bombus bimaculatus",
+                                                        "Bombus impatiens",
+                                                        "Bombus ternarius",
+                                                        "Bombus perplexus",
+                                                        "Bombus sandersoni"),
+                                         "Pyrobombus",
+                                         ifelse(species %in% c("Bombus auricomus"),
+                                                "Bombias",
+                                                ifelse(species %in% c("Bombus fervidus",
+                                                                      "Bombus pensylvanicus"),
+                                                       "Thoracobombus",
+                                                       ifelse(species %in% c("Bombus citrinus",
+                                                                              "Bombus variabilis",
+                                                                              "Bombus ashtoni"),
+                                                              "Psithyrus",
+                                                              "Subterraneobombus")))))))
+```
+
+## 8 bins
+```{r}
 bin8.bumbles.df <- rbin_quantiles(data = bumbles.df, 
                                   response = species,
                                   predictor = year,
                                   bins = 8)
-bin8.bumbles.df
-```
-Break points are: 
-**Bin 1: 1900 - 1923**
-**Bin 2: 1924 - 1946**
-**Bin 3: 1947 - 1962**
-**Bin 4: 1963 - 1968**
-**Bin 5: 1969 - 1972**
-**Bin 6: 1973 - 1993**
-**Bin 7: 1994 - 2013**
-**Bin 8: 2014 - 2018**
-
-```{r}
-bumbles.bin.df <- bumbles.df %>%
-  mutate(bin = case_when(
-    year < 1924 ~ "1900-1923",
+bumbles.df <- bumbles.df %>%
+  mutate(bin_8 = case_when(
+    year < 1924 ~ "1824-1923",
     between(year, 1924, 1946) ~ "1924-1946",
     between(year, 1947, 1962) ~ "1947-1962",
     between(year, 1963, 1968) ~ "1963-1968",
@@ -72,12 +87,481 @@ bumbles.bin.df <- bumbles.df %>%
     between(year, 1994, 2013) ~ "1994-2013",
     between(year, 2014, 2019) ~ "2013-present"
   ))
-table(bumbles.bin.df$bin)
+bumbles.df$bin_8 <- factor(bumbles.df$bin_8,
+                           levels = c("1824-1923",
+                                      "1924-1946",
+                                      "1947-1962",
+                                      "1963-1968",
+                                      "1969-1972",
+                                      "1973-1993",
+                                      "1994-2013",
+                                      "2013-present"))
+table(bumbles.df$bin_8)
+```
+
+## 5 bins
+```{r}
+bin5.bumbles.df <- rbin_quantiles(data = bumbles.df, 
+                                  response = species,
+                                  predictor = year,
+                                  bins = 5)
+bumbles.df <- bumbles.df %>%
+  mutate(bin_5 = case_when(
+    year < 1936 ~ "1824-1935",
+    between(year, 1936, 1963) ~ "1936-1963",
+    between(year, 1964, 1971) ~ "1964-1971",
+    between(year, 1972, 2006) ~ "1972-2006",
+    between(year, 2007, 2019) ~ "2007-present"
+  ))
+bumbles.df$bin_5 <- factor(bumbles.df$bin_5,
+                           levels = c("1824-1935",
+                                      "1936-1963",
+                                      "1964-1971",
+                                      "1972-2006",
+                                      "2007-present"))
+table(bumbles.df$bin_5)
+```
+
+## 3 bins
+```{r}
+bin3.bumbles.df <- rbin_quantiles(data = bumbles.df, 
+                                  response = species,
+                                  predictor = year,
+                                  bins = 3)
+bumbles.df <- bumbles.df %>%
+  mutate(bin_3 = case_when(
+    year < 1960 ~ "1824-1959",
+    between(year, 1960, 1981) ~ "1960-1981",
+    between(year, 1982, 2019) ~ "1982-present",
+  ))
+bumbles.df$bin_3 <- factor(bumbles.df$bin_3,
+                           levels = c("1900-1959",
+                                      "1960-1981",
+                                      "1982-present"))
+table(bumbles.df$bin_3)
+```
+
+```{r}
+
 ```
 
 ## Rarefied species richness per bin
 Per Bartomeus et al. (2013) PNAS paper.  Rarefy to 80% of number of specimens in smallest bin.  Smallest bin = 1963-1968 @ 2621 * 0.8 = *2097 specimens*
-```{r}
 
+JK this is based on Richardson et al. (2018).  Using `iNEXT`.  
+
+### 5 period estimated spp. richness
+```{r}
+rare.bumbles.df <- bumbles.df %>%
+  dplyr::select(species, t_period, bin_3, bin_5, bin_8)
+rare.bumbles.5bin.df <- rare.bumbles.df %>%
+  dplyr::select(species, bin_5) %>%
+  group_by(bin_5) %>%
+  count(species)
+rare.bumbles.5period.df <- data.frame(time_bin = rare.bumbles.5bin.df$bin_5,
+                                      abun = rare.bumbles.5bin.df$n)
+rare.bumbles.5period <- list("1" = sort(rare.bumbles.5period.df$abun[rare.bumbles.5period.df$time_bin == "1900-1935"]),
+                             "2" = sort(rare.bumbles.5period.df$abun[rare.bumbles.5period.df$time_bin == "1936-1963"]),
+                             "3" = sort(rare.bumbles.5period.df$abun[rare.bumbles.5period.df$time_bin == "1964-1971"]),
+                             "4" = sort(rare.bumbles.5period.df$abun[rare.bumbles.5period.df$time_bin == "1972-2006"]),
+                             "5" = sort(rare.bumbles.5period.df$abun[rare.bumbles.5period.df$time_bin == "2007-present"]))
+rare.5period.df <- iNEXT(rare.bumbles.5period, 
+             q = 0,
+             datatype = "abundance",
+             knots = 200,
+             # endpoint = 25,000,
+             nboot = 500)
+ggiNEXT(rare.5period.df,
+        color.var = "site")
+rareest.5period.df <- estimateD(rare.bumbles.5period,
+                                datatype = "abundance",
+                                base = "coverage",
+                                level = 0.985,
+                                conf = 0.95)
+rareest.5period.df$site <- as.numeric(as.character(rareest.5period.df$site))
+rareest.5period.df %>%
+  filter(order == 0) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = site, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  size = 0.8) +
+  geom_smooth(mapping = aes(x = site,
+                            y = qD),
+              method = "lm",
+              color = "black") + 
+  theme_minimal()
 ```
+
+### 8 period estimated spp. richness
+```{r}
+rare.bumbles.8bin.df <- rare.bumbles.df %>%
+  dplyr::select(species, bin_8) %>%
+  group_by(bin_8) %>%
+  count(species)
+rare.bumbles.8period.df <- data.frame(time_bin = rare.bumbles.8bin.df$bin_8,
+                                      abun = rare.bumbles.8bin.df$n)
+rare.bumbles.8period <- list("1" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1900-1923"]),
+                             "2" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1924-1946"]),
+                             "3" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1947-1962"]),
+                             "4" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1963-1968"]),
+                             "5" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1969-1972"]),
+                             "6" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1973-1993"]),
+                             "7" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "1994-2013"]),
+                             "8" = sort(rare.bumbles.8period.df$abun[rare.bumbles.8period.df$time_bin == "2013-present"]))
+rare.8period.df <- iNEXT(rare.bumbles.8period, 
+             q = 0,
+             datatype = "abundance",
+             knots = 200,
+             # endpoint = 25,000,
+             nboot = 500)
+ggiNEXT(rare.8period.df,
+        color.var = "site")
+rareest.8period.df <- estimateD(rare.bumbles.8period,
+                                datatype = "abundance",
+                                base = "coverage",
+                                level = 0.985,
+                                conf = 0.95)
+rareest.8period.df$site <- as.numeric(as.character(rareest.8period.df$site))
+rareest.8period.df %>%
+  filter(order == 0) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = site, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  size = 0.8) +
+  geom_smooth(mapping = aes(x = site,
+                            y = qD),
+              method = "lm",
+              color = "black") + 
+  ylab("Estimated species richness") + 
+  xlab("Time Period") + 
+  theme_minimal()
+
+
+lm <- lm(qD ~ site, data = temp.data)
+summary(lm)$r.squared
+summary(lm)
+```
+
+#### Permutation test
+```{r}
+perm.test <- function(data, n.perm) {
+  temp.data <- data %>%
+    filter(order == 0)
+  true.lm <- lm(qD ~ site,
+                data = temp.data)
+  true.r2 <- summary(lm)$r.squared
+  x <- seq(1, n.perm, 1)
+  rsq <- list()
+  order <- list()
+  for (i in x) {
+    rand.data.df <- data.frame(temp.data[sample(nrow(temp.data)),])
+    rand.data.df$time <- seq.int(nrow(rand.data.df))
+    lm <- lm(qD ~ time,
+             data = rand.data.df)
+    rsq[[i]] <- data.frame(summary(lm)$r.squared)
+    order[[i]] <- data.frame(toString(c(rand.data.df$site)))
+  }
+  rsq.df <- bind_rows(rsq)
+  colnames(rsq.df) <- "r2"
+  order.df <- bind_rows(order)
+  colnames(order.df) <- "site_order"
+  permresults.df <- bind_cols(rsq.df, 
+                              order.df)
+  p.prop <- permresults.df %>%
+    summarise(p.prop = sum(r2 > true.r2))
+  p.value <- p.prop / nrow(permresults.df)
+  assign("permtest.df",
+         permresults.df,
+         envir = .GlobalEnv)
+  print(paste("p-value:",
+              p.value))
+}
+perm.test(rareest.8period.df, n.perm = 1000)
+perm.test(rareest.5period.df, n.perm = 1000)
+```
+
+
+# Relative abundance over time
+## by **_county_** and 8 period average relative abundance change
+```{r}
+bumbles.relabun.bycty.df <- bumbles.df %>%
+  dplyr::select(county, state, species, subgenus, bin_8) %>%
+  group_by(county, state, species, subgenus, bin_8) %>%
+  summarise(n_bumbles = n()) %>%
+  mutate(state_name = abbr2state(state)) %>%
+  ungroup()
+bumbles.relabun.bycty.df
+total.abun.bybin.df <- bumbles.relabun.bycty.df %>%
+  group_by(bin_8, county) %>%
+  summarise(total_bumbles = sum(n_bumbles))
+total.abun.bybin.df
+bumbles.relabun.bycty.df <- bumbles.relabun.bycty.df %>%
+  left_join(total.abun.bybin.df,
+            by = c("bin_8" = "bin_8", "county" = "county")) %>%
+  mutate(relative_abun = n_bumbles / total_bumbles)
+
+# Calculate change in relative abundance by county over time bins
+bumbles.deltarelabun.bycty.df <- bumbles.relabun.bycty.df %>%
+  ungroup() %>%
+  group_by(county, state, species) %>%
+  mutate(delta_ra = c(NA, diff(relative_abun))) %>%
+  summarise(mean_delta_ra = mean(delta_ra,
+                                 na.rm = TRUE)) %>%
+  mutate(state_full = abbr2state(state))
+bumbles.relabun.bycty.df
+bumbles.deltarelabun.bycty.df <-  full_join(ungroup(bumbles.deltarelabun.bycty.df),
+                                            ungroup(us.county.midwest),
+                                            by = c("county" = "CNTY_NAME"))
+
+bumbles.deltarelabun.bycty.plot <- ggplot() + 
+  geom_polygon(data = bumbles.deltarelabun.bycty.df,
+               mapping = aes(x = long,
+                             y = lat,
+                             fill = mean_delta_ra,
+                             group = group)) +
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               fill = "transparent",
+               color = "gray80",
+               size = 0.25,
+               na.rm = TRUE) + 
+  scale_fill_distiller(type = "div",
+                       palette = "RdYlBu",
+                       na.value = "transparent") +
+  coord_map("stereographic") +
+  facet_wrap(~ species,
+             labeller = as_labeller(species),
+             ncol = 5) + 
+  theme_void()
+bumbles.deltarelabun.bycty.plot
+```
+
+## by **_county_** and 2 period relative abundance change
+```{r}
+bumbles.relabun.bycty.df <- bumbles.df %>%
+  dplyr::select(county, state, species, subgenus, t_period) %>%
+  group_by(county, state, species, subgenus, t_period) %>%
+  summarise(n_bumbles = n()) %>%
+  mutate(state_name = abbr2state(state)) %>%
+  ungroup()
+bumbles.relabun.bycty.df
+total.abun.bybin.df <- bumbles.relabun.bycty.df %>%
+  group_by(t_period, county) %>%
+  summarise(total_bumbles = sum(n_bumbles))
+total.abun.bybin.df
+bumbles.relabun.bycty.df <- bumbles.relabun.bycty.df %>%
+  left_join(total.abun.bybin.df,
+            by = c("t_period" = "t_period", "county" = "county")) %>%
+  mutate(relative_abun = n_bumbles / total_bumbles)
+bumbles.relabun.bycty.df
+
+bumbles.relabun.bycty.df$t_period <- factor(bumbles.relabun.bycty.df$t_period,
+                                            levels = c("historical",
+                                                       "contemp"))
+bumbles.relabun.bycty.df
+bumbles.deltarelabun.bycty.df
+bumbles.deltarelabun.bycty.df <- bumbles.relabun.bycty.df %>%
+  ungroup() %>%
+  group_by(county, state, species) %>%
+  mutate(delta_ra = relative_abun - lead(relative_abun)) %>%
+  mutate(state_full = abbr2state(state))
+bumbles.deltarelabun.bycty.df
+bumbles.deltarelabun.bycty.df <-  full_join(ungroup(bumbles.deltarelabun.bycty.df),
+                                            ungroup(us.county.midwest),
+                                            by = c("county" = "CNTY_NAME"))
+
+bumbles.deltarelabun.bycty.plot <- ggplot() + 
+  geom_polygon(data = bumbles.deltarelabun.bycty.df,
+               mapping = aes(x = long,
+                             y = lat,
+                             fill = delta_ra,
+                             group = group)) +
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               fill = "transparent",
+               color = "gray80",
+               size = 0.25,
+               na.rm = TRUE) + 
+  scale_fill_distiller(type = "div",
+                       palette = "RdYlBu",
+                       na.value = "gray80") +
+  coord_map("stereographic") +
+  facet_wrap(~ species,
+             labeller = as_labeller(species),
+             ncol = 5) + 
+  theme_void()
+bumbles.deltarelabun.bycty.plot
+```
+
+## by **_state_**
+```{r}
+bumbles.relabun.bystate.df <- bumbles.df %>%
+  dplyr::select(state, species, subgenus, bin_5) %>%
+  group_by(state, species, subgenus, bin_5) %>%
+  summarise(n_bumbles = n()) %>%
+  mutate(state_name = abbr2state(state)) %>%
+  ungroup()
+bumbles.relabun.bystate.df
+total.abun.bybin.df <- bumbles.relabun.bystate.df %>%
+  group_by(bin_5, state) %>%
+  summarise(total_bumbles = sum(n_bumbles))
+total.abun.bybin.df
+bumbles.relabun.bystate.df <- bumbles.relabun.bystate.df %>%
+  left_join(total.abun.bybin.df,
+            by = c("bin_5" = "bin_5", "state" = "state")) %>%
+  mutate(relative_abun = n_bumbles / total_bumbles)
+bumbles.relabun.bystate.df %>%
+  ungroup() %>%
+  group_by(species, state) %>%
+  mutate(delta_ra = c(NA, diff(relative_abun)))
+```
+
+## by **_time bin only_**
+```{r}
+bumbles.relabun.df <- bumbles.df %>%
+  dplyr::select(state, species, subgenus, bin_5,) %>%
+  group_by(species, subgenus, bin_5) %>%
+  summarise(n_bumbles = n()) %>%
+  ungroup()
+bumbles.relabun.df
+total.abun.bybin.df <- bumbles.relabun.df %>%
+  group_by(bin_5) %>%
+  summarise(total_bumbles = sum(n_bumbles))
+total.abun.bybin.df
+bumbles.relabun.df <- bumbles.relabun.df %>%
+  left_join(total.abun.bybin.df,
+            by = "bin_5") %>%
+  mutate(relative_abun = n_bumbles / total_bumbles)
+bumbles.relabun.df
+```
+
+## Plot each: 
+### by **_time only_**
+```{r}
+bumbles.relabun.df %>%
+  ggplot(mapping = aes(label = species)) + 
+  # geom_line(mapping = aes(x = bin,
+  #                         y = relative_abun,
+  #                         color = species,
+  #                         group = species),
+  #           # color = "#EEC643",
+  #           size = 1.25) +
+  geom_point(mapping = aes(x = bin_5,
+                           y = relative_abun,
+                           color = species),
+             size = 3) + 
+             # col = "#EEC643",
+             # alpha = 0.75) + 
+  # geom_text(mapping = aes(x = t_period,
+  #                         y = relative_abun + 0.1),
+  #           color = "black") + 
+  # geom_dl(mapping = aes(x = t_period,
+  #                       y = relative_abun,
+  #                       label = species),
+  #         method = "last.points",
+  #         color = "black") + 
+  geom_smooth(mapping = aes(x = bin_5,
+                            y = relative_abun,
+                            group = species,
+                            color = species),
+              method = "lm",
+              linetype = 1,
+              alpha = 0.1) +
+  # scale_color_gradient(low = "#382B01",
+  #                      high = "#F4E3A7") + 
+  theme_minimal() + 
+  scale_y_continuous(limits = c(-0.05, 0.5)) + 
+  scale_x_discrete(expand = c(0.01, 0.5)) + 
+  # coord_fixed(ratio = 2) + 
+  facet_grid(vars(subgenus))
+```
+
+### by **_state only_**
+```{r}
+bumbles.relabun.bystate.df %>%
+  ggplot(mapping = aes(label = species)) + 
+  # geom_line(mapping = aes(x = bin,
+  #                         y = relative_abun,
+  #                         color = species,
+  #                         group = species),
+  #           # color = "#EEC643",
+  #           size = 1.25) +
+  geom_point(mapping = aes(x = bin_5,
+                           y = relative_abun,
+                           color = species),
+             size = 3) + 
+             # col = "#EEC643",
+             # alpha = 0.75) + 
+  # geom_text(mapping = aes(x = t_period,
+  #                         y = relative_abun + 0.1),
+  #           color = "black") + 
+  # geom_dl(mapping = aes(x = t_period,
+  #                       y = relative_abun,
+  #                       label = species),
+  #         method = "last.points",
+  #         color = "black") + 
+  geom_smooth(mapping = aes(x = bin_5,
+                            y = relative_abun,
+                            group = species,
+                            color = species),
+              method = "lm",
+              linetype = 1,
+              alpha = 0.1) +
+  # scale_color_gradient(low = "#382B01",
+  #                      high = "#F4E3A7") + 
+  theme_light() + 
+  scale_y_continuous(limits = c(-0.05, 0.75)) + 
+  scale_x_discrete(expand = c(0.01, 0.5)) + 
+  # coord_fixed(ratio = 2) + 
+  facet_grid(vars(subgenus))
+```
+
+### by **_county_**
+```{r}
+bumbles.relabun.bycty.df %>%
+  ggplot(mapping = aes(label = species)) + 
+  # geom_line(mapping = aes(x = bin,
+  #                         y = relative_abun,
+  #                         color = species,
+  #                         group = species),
+  #           # color = "#EEC643",
+  #           size = 1.25) +
+  geom_point(mapping = aes(x = bin_8,
+                           y = relative_abun,
+                           color = species),
+             size = 3) + 
+             # col = "#EEC643",
+             # alpha = 0.75) + 
+  # geom_text(mapping = aes(x = t_period,
+  #                         y = relative_abun + 0.1),
+  #           color = "black") + 
+  # geom_dl(mapping = aes(x = t_period,
+  #                       y = relative_abun,
+  #                       label = species),
+  #         method = "last.points",
+  #         color = "black") + 
+  geom_smooth(mapping = aes(x = bin_8,
+                            y = relative_abun,
+                            group = species,
+                            color = species),
+              method = "lm",
+              linetype = 1,
+              alpha = 0.1) +
+  # scale_color_gradient(low = "#382B01",
+  #                      high = "#F4E3A7") + 
+  theme_light() + 
+  scale_y_continuous(limits = c(-0.05, 1.0)) + 
+  scale_x_discrete(expand = c(0.01, 0.5)) + 
+  # coord_fixed(ratio = 2) + 
+  facet_grid(vars(subgenus))
+```
+
 

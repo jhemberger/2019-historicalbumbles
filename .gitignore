@@ -12,3 +12,6 @@ NO_DELETE_OGDATA
 USCounties_Shapefile
 2016*
 .DS*
+*.csv
+*.xlsx
+*.html

@@ -28,6 +28,7 @@ library(lme4)
 library(lmerTest)
 library(coin)
 library(rbin)
+library(directlabels)
 ```
 
 # Import data
@@ -308,10 +309,13 @@ bumbles.relabun.bycty.df <- bumbles.relabun.bycty.df %>%
 bumbles.deltarelabun.bycty.df <- bumbles.relabun.bycty.df %>%
   ungroup() %>%
   group_by(county, state, species) %>%
-  mutate(delta_ra = c(NA, diff(relative_abun))) %>%
+  mutate(delta_ra = relative_abun - lag(relative_abun)) %>%
   summarise(mean_delta_ra = mean(delta_ra,
                                  na.rm = TRUE)) %>%
   mutate(state_full = abbr2state(state))
+
+write_csv(bumbles.deltarelabun.bycty.df,
+          "bumbles_deltarelabun.csv")
 bumbles.relabun.bycty.df
 bumbles.deltarelabun.bycty.df <-  full_join(ungroup(bumbles.deltarelabun.bycty.df),
                                             ungroup(us.county.midwest),
@@ -440,8 +444,36 @@ bumbles.relabun.df <- bumbles.relabun.df %>%
   left_join(total.abun.bybin.df,
             by = "bin_5") %>%
   mutate(relative_abun = n_bumbles / total_bumbles)
+bumbles.relabun.df <- bumbles.relabun.df %>%
+  group_by(species) %>%
+  mutate(time_period_num = row_number())
 bumbles.relabun.df
 ```
+
+### Create area plot to show temporal trends
+```{r}
+bumble.area.plot <- bumbles.relabun.df %>%
+  group_by(time_period_num) %>%
+  arrange(relative_abun, 
+          .by_group = TRUE) %>%
+  mutate(species_factor = factor(species, 
+                                 levels = c(.$species[.$time_period_num == 3]))) %>%
+  ggplot() + 
+  geom_area(mapping = aes(x = time_period_num,
+                          y = relative_abun,
+                          fill = species_factor),
+            position = position_stack(reverse = FALSE)) + 
+  scale_fill_viridis_d(option = "inferno",
+                       direction = 1) +
+  facet_wrap(~ subgenus) + 
+  theme_minimal()
+bumble.area.plot
+ggsave("./bumble_area_plot.png",
+       bumble.area.plot,
+       width = 7,
+       height = 4)
+```
+
 
 ## Plot each: 
 ### by **_time only_**
@@ -564,4 +596,133 @@ bumbles.relabun.bycty.df %>%
   facet_grid(vars(subgenus))
 ```
 
+# Relate change in ag with change in relative abundance
+## Read in data
+```{r}
+bumbles.deltarelabun.df <- read_csv("./bumbles_deltarelabun.csv")
+bumbles.species.subgenus.df <- bumbles.df %>%
+  group_by(species, subgenus) %>%
+  distinct(species)
+bumbles.deltarelabun.df <- bumbles.deltarelabun.df %>%
+  left_join(bumbles.species.subgenus.df,
+            by = "species")
+midwestag.df <- read_csv("./midwestag.csv")
+```
+
+## Combine data
+```{r}
+bumble.by.ag.df <- midwestag.df %>%
+  dplyr::select(STATE_NAME, 
+                CNTY_NAME, 
+                SUB_REGION, 
+                ag_stat_name, 
+                ag_stat_value, 
+                year, 
+                stat, 
+                ag_delta) %>%
+  group_by(STATE_NAME, CNTY_NAME, stat) %>%
+  summarise(mean_ag_delta = mean(ag_delta,
+                                 na.rm = TRUE)) %>%
+  left_join(bumbles.deltarelabun.df,
+            by = c("CNTY_NAME" = "county", 
+                   "STATE_NAME" = "state_full"))
+```
+
+## Plot `delta_ag` vs `delta_relabun` by species w/overall average
+```{r}
+bumble.by.ag.plot <- bumble.by.ag.df %>%
+  filter(stat == "RATIO") %>%
+  filter(!is.na(mean_delta_ra)) %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = mean_ag_delta,
+                           y = mean_delta_ra,
+                           fill = species),
+             shape = 21,
+             color = "black") + 
+  geom_smooth(mapping = aes(x = mean_ag_delta,
+                            y = mean_delta_ra,
+                            group = species,
+                            color = species),
+              method = "lm",
+              se = FALSE) + 
+  # geom_smooth(mapping = aes(x = mean_ag_delta,
+  #                           y = mean_delta_ra),
+  #             method = "lm",
+  #             color = "red",
+  #             size = 1.5) + 
+  xlim(-0.025, 0.075) + 
+  ylim(-1, 1) +
+  # geom_dl(mapping = aes(x = mean_ag_delta,
+  #                       y = mean_delta_ra,
+  #                       label = species),
+  #         method = "angled.boxes") + 
+  facet_wrap(~ subgenus,
+             ncol = 4) +
+  theme_minimal() + 
+  theme(legend.position = "none")
+
+bumble.by.ag.plot <- direct.label(bumble.by.ag.plot, "last.bumpup")
+bumble.by.ag.plot
+ggsave("./bumble_byag_plot.png",
+       bumble.by.ag.plot,
+       height = 4.5,
+       width = 7)
+```
+
+## Plot ag ratio vs `delta_relabun` by species w/overall average
+```{r}
+bumble.by.agratio.plot <- midwestag.df %>%
+  dplyr::select(STATE_NAME, 
+                CNTY_NAME, 
+                SUB_REGION, 
+                ag_stat_name, 
+                ag_stat_value, 
+                year, 
+                stat, 
+                ag_delta) %>%
+  filter(stat == "RATIO") %>%
+  group_by(STATE_NAME, CNTY_NAME) %>%
+  summarise(mean_ag = mean(ag_stat_value,
+                           na.rm = TRUE)) %>%
+  left_join(bumbles.deltarelabun.df,
+            by = c("CNTY_NAME" = "county", 
+                   "STATE_NAME" = "state_full")) %>%
+  filter(!is.na(mean_delta_ra)) %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = mean_ag,
+                           y = mean_delta_ra,
+                           fill = species),
+             shape = 21,
+             color = "black") + 
+  geom_smooth(mapping = aes(x = mean_ag,
+                            y = mean_delta_ra,
+                            group = species,
+                            color = species),
+              method = "lm",
+              se = FALSE) + 
+  # geom_smooth(mapping = aes(x = mean_ag,
+  #                           y = mean_delta_ra),
+  #             method = "lm",
+  #             color = "red",
+  #             size = 1.5) + 
+  xlim(0, 1) + 
+  ylim(-1, 1) +
+  # geom_dl(mapping = aes(x = mean_ag_delta,
+  #                       y = mean_delta_ra,
+  #                       label = species),
+  #         method = "angled.boxes") + 
+  facet_wrap(~ subgenus,
+             ncol = 4) +
+  theme_minimal() + 
+  theme(legend.position = "none")
+
+bumble.by.agratio.plot <- direct.label(bumble.by.agratio.plot, 
+                                       list("last.bumpup",
+                                       cex = 0.5))
+bumble.by.agratio.plot
+ggsave("./bumble_byagratio_plot.png",
+       bumble.by.agratio.plot,
+       height = 4.5,
+       width = 7)
+```
 

@@ -45,7 +45,7 @@ New data frame columns:
 
 __January 8, 2019:__ Initial data cleanup is done.  Confined to lower 48 states, but did not include the IRC specimens yet as the data are horridly messy and need a lot of cleaning up.  Temporal trends in collection events actually look pretty good.  Well over 10000/decade from 1900 onward.  Today, need to clean up and do basic summary of ag data, along with some more basic summaries of bumble bees.  
 
-STill some big differences in collection number per decade - perhaps randomly sample 
+Still some big differences in collection number per decade - perhaps randomly sample 
 
 __January 14, 2019:__ Back-calculate total county area for all counties. Beyond 1997, will need to hand-calculate proportion of improved farmland from CDL (I think, unless additional data are out there)...
 
@@ -64,5 +64,20 @@ __August 7, 2019:__ As of today, have rough trends in diversity and abundance do
 
 - change in geographic range?  Similar to Wood et al. (2019)
 - use of traits (e.g., tongue length)? 
+- crop diversity as metric of ag intensity? 
+- crop yield as metric of ag intensity? 
+- combine multiple metrics to create an index of agricultural itensity? 
 
+__August 9, 2019:__ Created plot that relates average change in agricultural area (ratio) against average change in relative abundnace between 8 time periods by species.  
 
+![Plot](./bumble_byag_plot.png)
+
+![Plot](./bumble_byagratio_plot.png)
+
+Created plot to show relative abundance per species by year as area: 
+
+![Plot](./bumble_area_plot.png)
+
+Want to explore abundance-based similiarity indices to see if communities (@ county level, state level) are becoming more homogeneous over time.  Another way to look at diversity trends over time other than rarefied species richness. Looks like the package `SpadeR` will work - uses Chao et al. publications in the function `SimilarityMult()` to calculate similarity index matrix for species x assemblage input matrix (in my case, assemblege = time bin).  
+
+__August 12, 2019:__ 

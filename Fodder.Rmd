@@ -1,0 +1,46 @@
+
+
+iNext tutorial 
+```{r}
+library(iNEXT)
+
+data(spider)
+str(spider)
+spider
+
+inext.test <- iNEXT(spider,
+                    q = 0,
+                    datatype = "abundance")
+inext.test
+ggiNEXT(inext.test, 
+        color.var = "site",
+        facet.var = "none")
+ant
+
+data(BCI)
+BCI.test.no.zero <- unlist(BCI[1,])
+
+i.zero <- which(BCI.test.no.zero == 0)
+BCI.test.no.zero <- BCI.test.no.zero[-i.zero]
+```
+
+
+
+```{r}
+library(FedData)
+
+nlcd <- get_nlcd(study.states, 
+                 label = "my.label",
+                 year = )
+plot(nlcd)
+```
+
+```{r}
+library(raster)
+us <- getData("GADM", country = "USA", level = 1)
+
+study.states <- subset(us,
+                       NAME_1 == "Wisconsin" | NAME_1 == "Minnesota" | NAME_1 == "Illinois" | NAME_1 == "Iowa")
+plot(study.states)
+```
+

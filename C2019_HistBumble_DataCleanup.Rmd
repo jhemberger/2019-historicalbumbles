@@ -911,3 +911,4 @@ relative.abun.2period.df %>%
   ggsave("relativeabun.eps")
 ```
 
+summary(lm(mean_delta_ra ~ mean_ag, data = test.df))

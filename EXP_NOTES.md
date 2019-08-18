@@ -70,14 +70,17 @@ __August 7, 2019:__ As of today, have rough trends in diversity and abundance do
 
 __August 9, 2019:__ Created plot that relates average change in agricultural area (ratio) against average change in relative abundnace between 8 time periods by species.  
 
-![Plot](./bumble_byag_plot.png)
+![](./bumble_byag_plot.png)
 
-![Plot](./bumble_byagratio_plot.png)
+![](./bumble_byagratio_plot.png)
 
 Created plot to show relative abundance per species by year as area: 
 
-![Plot](./bumble_area_plot.png)
+![](./bumble_area_plot.png)
 
 Want to explore abundance-based similiarity indices to see if communities (@ county level, state level) are becoming more homogeneous over time.  Another way to look at diversity trends over time other than rarefied species richness. Looks like the package `SpadeR` will work - uses Chao et al. publications in the function `SimilarityMult()` to calculate similarity index matrix for species x assemblage input matrix (in my case, assemblege = time bin).  
 
-__August 12, 2019:__ 
+__August 12, 2019:__ Would be good for a state-level summary to see which states have seen the greatest changes in ag expansion/intensification along side average change in bumble bee relative abundance and estimated species richness/biotic similarity. 
+
+__August 14, 2019:__ 
+

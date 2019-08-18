@@ -15,6 +15,8 @@ library(tidyverse)
 library(rgdal)
 library(ggmap)
 library(ggalt)
+library(ggforce)
+library(cowplot)
 library(raster)
 library(maptools)
 library(maps)
@@ -180,7 +182,7 @@ rareest.5period.df <- estimateD(rare.bumbles.5period,
                                 level = 0.985,
                                 conf = 0.95)
 rareest.5period.df$site <- as.numeric(as.character(rareest.5period.df$site))
-rareest.5period.df %>%
+rareest.5period.plot <- rareest.5period.df %>%
   filter(order == 0) %>%
   ggplot() + 
   geom_pointrange(mapping = aes(x = site, 
@@ -193,6 +195,7 @@ rareest.5period.df %>%
               method = "lm",
               color = "black") + 
   theme_minimal()
+rareest.5period.plot
 ```
 
 ### 8 period estimated spp. richness
@@ -225,7 +228,7 @@ rareest.8period.df <- estimateD(rare.bumbles.8period,
                                 level = 0.985,
                                 conf = 0.95)
 rareest.8period.df$site <- as.numeric(as.character(rareest.8period.df$site))
-rareest.8period.df %>%
+rareest.8period.plot <- rareest.8period.df %>%
   filter(order == 0) %>%
   ggplot() + 
   geom_pointrange(mapping = aes(x = site, 
@@ -239,12 +242,8 @@ rareest.8period.df %>%
               color = "black") + 
   ylab("Estimated species richness") + 
   xlab("Time Period") + 
-  theme_minimal()
-
-
-lm <- lm(qD ~ site, data = temp.data)
-summary(lm)$r.squared
-summary(lm)
+  theme_classic()
+rareest.8period.plot
 ```
 
 #### Permutation test
@@ -320,13 +319,22 @@ bumbles.relabun.bycty.df
 bumbles.deltarelabun.bycty.df <-  full_join(ungroup(bumbles.deltarelabun.bycty.df),
                                             ungroup(us.county.midwest),
                                             by = c("county" = "CNTY_NAME"))
+ 
 
-bumbles.deltarelabun.bycty.plot <- ggplot() + 
-  geom_polygon(data = bumbles.deltarelabun.bycty.df,
-               mapping = aes(x = long,
+bumbles.deltarelabun.bycty.df <- bumbles.deltarelabun.bycty.df %>%
+  mutate(inc_dec = case_when(mean_delta_ra < -0.05 ~ "Decrease",
+                             between(mean_delta_ra, -0.025, 0.025) ~ "No change",
+                             mean_delta_ra > 0.05 ~ "Increase"))
+bumbles.deltarelabun.bycty.plot <- bumbles.deltarelabun.bycty.df %>%
+  filter(!is.na(inc_dec)) %>%
+  filter(!(species %in% c("Bombus fraternus",
+                          "Bombus ashtoni"))) %>%
+  ggplot() + 
+  geom_polygon(mapping = aes(x = long,
                              y = lat,
-                             fill = mean_delta_ra,
-                             group = group)) +
+                             fill = inc_dec,
+                             group = group),
+               alpha = 0.8) +             
   geom_polygon(data = us.county.midwest,
                mapping = aes(x = long,
                              y = lat,
@@ -335,15 +343,45 @@ bumbles.deltarelabun.bycty.plot <- ggplot() +
                color = "gray80",
                size = 0.25,
                na.rm = TRUE) + 
-  scale_fill_distiller(type = "div",
-                       palette = "RdYlBu",
-                       na.value = "transparent") +
+  scale_fill_manual(values = c("#C05746",
+                               "#557F33",
+                               "#CCF4AB")) +
+  # scale_fill_distiller(type = "div",
+  #                      palette = "RdYlBu",
+  #                      na.value = "transparent") +
   coord_map("stereographic") +
   facet_wrap(~ species,
              labeller = as_labeller(species),
              ncol = 5) + 
   theme_void()
 bumbles.deltarelabun.bycty.plot
+
+bumbles.deltarelabun.bycty.hist <- bumbles.deltarelabun.bycty.df %>%
+  filter(!is.na(inc_dec)) %>%
+  filter(!(species %in% c("Bombus fraternus",
+                          "Bombus ashtoni"))) %>%
+  group_by(species, inc_dec) %>%
+  summarise(n = n()) %>%
+  ggplot() + 
+  # geom_vline(mapping = aes(xintercept = 0),
+  #            color = "tomato",
+  #            size = 0.5,
+  #            alpha = 0.5) +
+  # geom_density(mapping = aes(x = mean_delta_ra),
+  #              adjust = 5,
+  #              fill = "goldenrod",
+  #              alpha = 0.5) + 
+  geom_col(mapping = aes(x = inc_dec,
+                         y = n,
+                         fill = inc_dec)) + 
+  scale_fill_manual(values = c("#C05746",
+                               "#557F33",
+                               "#CCF4AB")) +
+  facet_wrap(~ species,
+             labeller = as_labeller(species),
+             ncol = 5) + 
+  theme_minimal_hgrid()
+bumbles.deltarelabun.bycty.hist
 ```
 
 ## by **_county_** and 2 period relative abundance change
@@ -634,6 +672,14 @@ bumble.by.ag.plot <- bumble.by.ag.df %>%
   filter(stat == "RATIO") %>%
   filter(!is.na(mean_delta_ra)) %>%
   ggplot() + 
+  geom_vline(xintercept = 0.0,
+             color = "black",
+             size = 0.75,
+             alpha = 0.25) +
+  geom_hline(yintercept = 0.0,
+             color = "black",
+             size = 0.75,
+             alpha = 0.25) +
   geom_point(mapping = aes(x = mean_ag_delta,
                            y = mean_delta_ra,
                            fill = species),
@@ -652,21 +698,47 @@ bumble.by.ag.plot <- bumble.by.ag.df %>%
   #             size = 1.5) + 
   xlim(-0.025, 0.075) + 
   ylim(-1, 1) +
-  # geom_dl(mapping = aes(x = mean_ag_delta,
-  #                       y = mean_delta_ra,
-  #                       label = species),
-  #         method = "angled.boxes") + 
+  xlab("Mean change in county-level proportion ag") + 
+  ylab("Mean change in relative abundance") +
+  scale_fill_viridis_d(option = "inferno",
+                       direction = 1) +
+  scale_color_viridis_d(option = "inferno",
+                        direction = 1) + 
   facet_wrap(~ subgenus,
              ncol = 4) +
   theme_minimal() + 
-  theme(legend.position = "none")
+  theme(legend.position = "none") + 
+  theme(panel.border = element_rect(color = "gray50",
+                                    size = 1.25,
+                                    fill = "transparent"))
 
-bumble.by.ag.plot <- direct.label(bumble.by.ag.plot, "last.bumpup")
+bumble.by.ag.plot <- direct.label(bumble.by.ag.plot, 
+                                  list("extreme.grid",
+                                       cex = 0.5))
 bumble.by.ag.plot
 ggsave("./bumble_byag_plot.png",
        bumble.by.ag.plot,
        height = 4.5,
        width = 7)
+
+```
+
+## Density plot of county-level average ag change for each state
+```{r}
+ggplot() + 
+  geom_vline(xintercept = 0.0,
+             color = "red",
+             size = 1.5,
+             alpha = 0.5) + 
+  geom_density(data = bumble.by.ag.df %>%
+                 filter(stat == "RATIO") %>%
+                 filter(!is.na(mean_delta_ra)),
+               mapping = aes(x = mean_ag_delta,
+                             fill = state),
+               alpha = 0.75) + 
+  scale_fill_viridis_d(option = "inferno",
+                       direction = 1) + 
+  theme_minimal()
 ```
 
 ## Plot ag ratio vs `delta_relabun` by species w/overall average
@@ -689,6 +761,9 @@ bumble.by.agratio.plot <- midwestag.df %>%
                    "STATE_NAME" = "state_full")) %>%
   filter(!is.na(mean_delta_ra)) %>%
   ggplot() + 
+  geom_hline(yintercept = 0,
+             color = "black",
+             alpha = 0.25) + 
   geom_point(mapping = aes(x = mean_ag,
                            y = mean_delta_ra,
                            fill = species),
@@ -707,17 +782,22 @@ bumble.by.agratio.plot <- midwestag.df %>%
   #             size = 1.5) + 
   xlim(0, 1) + 
   ylim(-1, 1) +
-  # geom_dl(mapping = aes(x = mean_ag_delta,
-  #                       y = mean_delta_ra,
-  #                       label = species),
-  #         method = "angled.boxes") + 
+  xlab("Mean county-level proportion ag") + 
+  ylab("Mean change in relative abundance") +
+  scale_fill_viridis_d(option = "inferno",
+                       direction = 1) +
+  scale_color_viridis_d(option = "inferno",
+                        direction = 1) + 
   facet_wrap(~ subgenus,
              ncol = 4) +
   theme_minimal() + 
-  theme(legend.position = "none")
+  theme(legend.position = "none") + 
+  theme(panel.border = element_rect(color = "gray50",
+                                    size = 1.25,
+                                    fill = "transparent"))
 
 bumble.by.agratio.plot <- direct.label(bumble.by.agratio.plot, 
-                                       list("last.bumpup",
+                                       list("smart.grid",
                                        cex = 0.5))
 bumble.by.agratio.plot
 ggsave("./bumble_byagratio_plot.png",

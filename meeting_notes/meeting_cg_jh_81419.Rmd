@@ -1,0 +1,25 @@
+---
+title: "Meeting Notes"
+subtitle: "Update w/Claudio"
+date: "8/14/19"
+output: html_document
+---
+
+Met with Claudio today to discuss these analyses.  Major take aways: 
+
+- Similar to Leif, filter down obsv. to include only `single collector x species x date` occurances. 
+- Take a look at Benton et al. (2002) for some similar analyses with ag intensification and insect/bird populations
+  - PCoA to use as an index
+  - Create index based on yield, areal ag amount, etc. 
+- Explore metric of survey intensity by county over time - where have folks been looking vs. where they havent been
+- Standardization of B. affinis based on benchmark species not in decline (e.g., gris, bimac).  
+- Add histogram of obsv. to state mean delta change by county map.
+- Change to delta to absolute change (+/-) rather than actual change in relative abundance
+- Spatial variation in ag intensity as a predictor - see Tim's paper
+- Compute change in geographic range similar to Tom Wood's paper - except do both by time bin, as well as a binary historical/contemporary
+
+Questions to think about: 
+1. Are patterns of change in relative abundance similar across states/regions?  E.g., northern states vs. southern states
+2. Possible to include crop diversity or proportion of crops per county in analysis?  Talk to Mike Crossley.  FDOUND DATA ONLINE
+3. Eliminating inclusion of B.affinis for BBW?  May be skewing results for affinis. 
+

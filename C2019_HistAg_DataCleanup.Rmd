@@ -17,10 +17,86 @@ library(maps)
 library(raster)
 library(ggmap)
 library(gridExtra)
-devtools::install_github('thomasp85/gganimate')
 library(gganimate)
 library(transformr)
 ```
+
+# Load in Mike's proportion ag data
+```{r}
+histag2.df <- read_tsv("./AgCensus_MasterDataFrame.txt")
+```
+
+## Create crop code data frame
+```{r}
+cropcode.df <- tibble(crop_abbr = c("Brl",
+                                    "Bkw",
+                                    "Crn",
+                                    "Ctn",
+                                    "Flx",
+                                    "Hay",
+                                    "Oat",
+                                    "Pnt",
+                                    "Ptt",
+                                    "Pls",
+                                    "Ric",
+                                    "Rye",
+                                    "Sgm",
+                                    "Soy",
+                                    "Swt",
+                                    "Sgc",
+                                    "Tbc",
+                                    "Why"),
+                      crop_name = c("Barley",
+                                    "Buckwheat",
+                                    "Corn",
+                                    "Cotton",
+                                    "Flax",
+                                    "Hay (Grass + Legume)",
+                                    "Oats",
+                                    "Peanuts",
+                                    "Potato",
+                                    "Pulses (Bean, pea, lentil)",
+                                    "Rice",
+                                    "Rye",
+                                    "Sorghum",
+                                    "Soybeans",
+                                    "Sweet Potato",
+                                    "Sugar Cane",
+                                    "Tobacco",
+                                    "Wheat"))
+```
+
+
+## Reshape from wide -> long form
+```{r}
+histag2.df <- histag2.df %>%
+  gather(key = "crop_year",
+         value = "prop_county",
+         -c(STATE, COUNTY, FIPS, STCTY, AREA_KM, Bailey_Eco, USDA_FRR, Lon, Lat)) %>%
+  separate(crop_year, 
+           sep = 3,
+           remove = FALSE,
+           into = c("crop", "year")) %>%
+  left_join(cropcode.df,
+            by = c("crop" = "crop_abbr"))
+histag2.df$year <- as.numeric(histag2.df$year)
+histag2.df
+```
+
+## Trim down dataset to upper midwest
+```{r}
+midwestag.bycrop.df <- histag2.df %>%
+  filter(STATE %in% c("IL", "IN", "IA", "MI", "MN", "WI"))
+midwestag.bycrop.df
+```
+
+## Plot crop x time 
+```{r}
+midwestag.bycrop.df %>%
+  ggplot() + 
+  
+```
+
 
 # Clean up ag census data
 ## Load in raw data

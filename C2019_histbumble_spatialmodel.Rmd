@@ -1,0 +1,322 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Historical bumble bee data spatial model"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# Import packages
+```{r} 
+library(tidyverse)
+library(broom)
+library(broom.mixed)
+library(rgdal)
+library(ggmap)
+library(ggalt)
+library(ggforce)
+library(cowplot)
+library(raster)
+library(maptools)
+library(maps)
+library(mapdata)
+library(mp)
+library(vegan)
+library(iNEXT)
+library(magrittr)
+library(openintro)
+library(lme4)
+library(lmerTest)
+library(coin)
+library(rbin)
+library(directlabels)
+library(spdep)
+```
+
+# Import data
+```{r}
+spatial.bumbles.df <- read_csv("./spatial_bumbles.csv") %>%
+  dplyr::select(date, year, species, subgenus, dec_lat, dec_long, state, county, region, decade, t_period, time_period, 
+                bin_3, bin_5, bin_8, collector_spp_date)
+midwestag.vars.df <- read_csv("./midwestag_vars.csv")
+midwestag.vars.df
+spatial.bumbles.df
+```
+
+## Match bumble records to ag census period
+### Create time bin for each ag census period
+```{r}
+spatial.bumbles.df <- spatial.bumbles.df %>%
+   mutate(bin_ag = case_when(
+    year <= 1845 ~ 1840,
+    between(year, 1846, 1855) ~ 1850,
+    between(year, 1856, 1865) ~ 1860,
+    between(year, 1866, 1875) ~ 1870,
+    between(year, 1876, 1885) ~ 1880,
+    between(year, 1886, 1895) ~ 1890,
+    between(year, 1896, 1905) ~ 1900,
+    between(year, 1906, 1915) ~ 1910,
+    between(year, 1916, 1925) ~ 1920,
+    between(year, 1926, 1935) ~ 1930,
+    between(year, 1936, 1945) ~ 1940,
+    between(year, 1946, 1955) ~ 1950,
+    between(year, 1956, 1965) ~ 1959,
+    between(year, 1966, 1975) ~ 1974,
+    between(year, 1976, 1985) ~ 1982,
+    between(year, 1986, 1995) ~ 1992, 
+    between(year, 1996, 2005) ~ 2002,
+    between(year, 2006, 2019) ~ 2012))
+spatial.bumbles.df
+```
+
+### Option to limit analysis by `collector_spp_date`
+```{r}
+spatial.bumbles.df <- spatial.bumbles.df %>%
+  distinct(collector_spp_date,
+           .keep_all = TRUE) 
+```
+
+### Summarize data by `ag_bin` 
+(Relative abundance of species in each county at each ag census time point)
+```{r}
+spatial.bumbles.ra.df <- spatial.bumbles.df %>%
+  group_by(species, subgenus, state, county, bin_ag) %>%
+  summarise(species_abun = n()) %>%
+  ungroup() %>%
+  left_join(spatial.bumbles.df %>%
+              group_by(state, county, bin_ag) %>%
+              summarise(bin_ag_abundance = n()),
+            by = c("bin_ag" = "bin_ag",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  mutate(rel_abun = species_abun / bin_ag_abundance)
+spatial.bumbles.ra.df
+```
+
+### Join ag census data
+```{r}
+spatial.bumbles.allvars.df <- spatial.bumbles.ra.df %>%
+  ungroup() %>%
+  left_join(midwestag.vars.df,
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  filter(bin_ag_abundance > 10)
+spatial.bumbles.allvars.df
+```
+
+## Match ag census data to bumble bins (8bin) 
+### Option to limit analysis by `collector_spp_date`
+```{r}
+spatial.bumbles.df <- spatial.bumbles.df %>%
+  distinct(collector_spp_date,
+           .keep_all = TRUE) 
+```
+
+### Summarize data by `bin_8` 
+(Relative abundance of species in each county at each `bin_8`)
+```{r}
+spatial.bumbles.ra.df <- spatial.bumbles.df %>%
+  group_by(species, subgenus, state, county, decade, bin_8) %>%
+  summarise(species_abun = n()) %>%
+  ungroup() %>%
+  left_join(spatial.bumbles.df %>%
+              group_by(state, county, bin_8) %>%
+              summarise(bin_8_abundance = n()),
+            by = c("bin_8" = "bin_8",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  mutate(rel_abun = species_abun / bin_8_abundance)
+spatial.bumbles.ra.df
+table(spatial.bumbles.ra.df$bin_8_abundance)
+```
+
+### Join ag census data to NEAREST date
+```{r}
+spatial.bumbles.allvars.df <- spatial.bumbles.ra.df %>%
+  ungroup() %>%
+  full_join(midwestag.vars.df,
+            by = c("state" = "state",
+                   "county" = "county")) %>%
+  mutate(date_diff = abs(decade - year)) %>%
+  arrange(date_diff) %>%
+  group_by(species, state, county) %>%
+  slice(1) %>%
+  filter(!is.na(species))
+spatial.bumbles.allvars.df
+```
+
+
+# Basic test models w/ `lmer`
+## Full model, all spp., ~ relative_abun
+```{r}
+test.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
+                     (1 | state/county) + (1 | species),
+                   data = spatial.bumbles.allvars.df,
+                   na.action = na.exclude)
+summary(test.model)
+tidy(test.model)
+```
+
+## Model for rare species
+```{r}
+rarespp.df <- spatial.bumbles.allvars.df %>%
+  filter(species %in% c("Bombus affinis", 
+                        "Bombus pensylvanicus",
+                        "Bombus terricola"))
+rarespp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
+                     (1 | state/county) + (1 | species),
+                   data = rarespp.df,
+                   na.action = na.exclude)
+summary(rarespp.model)
+tidy(rarespp.model)  
+glance(rarespp.model)
+```
+
+## Model for common species
+```{r}
+cmnspp.df <- spatial.bumbles.allvars.df %>%
+  filter(species %in% c("Bombus griseocolis", 
+                        "Bombus impatiens",
+                        "Bombus bimaculatus", 
+                        "Bombus vagans",
+                        "Bombus auricomus",
+                        "Bombus ternarius"))
+cmnspp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
+                     (1 | state/county) + (1 | species),
+                   data = cmnspp.df,
+                   na.action = na.exclude)
+summary(cmnspp.model)
+tidy(cmnspp.model)
+glance(cmnspp.model)
+```
+
+## Model for _terricola_
+```{r}
+rarespp.df <- spatial.bumbles.allvars.df %>%
+  filter(species %in% c("Bombus terricola"))
+rarespp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
+                     (1 | state),
+                   data = rarespp.df,
+                   na.action = na.exclude)
+summary(rarespp.model)
+tidy(rarespp.model)  
+glance(rarespp.model)
+```
+
+## Model for _impatiens_
+```{r}
+cmnspp.df <- spatial.bumbles.allvars.df %>%
+  filter(species %in% c("Bombus impatiens"))
+cmnspp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
+                     (1 | state),
+                   data = cmnspp.df,
+                   na.action = na.exclude)
+summary(cmnspp.model)
+tidy(cmnspp.model)  
+glance(cmnspp.model)
+```
+
+
+```{r}
+spatial.bumbles.allvars.df %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = bin_8,
+                           y = rel_abun,
+                           color = species)) +
+  geom_smooth(mapping = aes(x = as.numeric(factor(bin_8)),
+                            y = rel_abun,
+                          color = species),
+              method = "lm") + 
+  facet_wrap(~ species) + 
+  # geom_smooth(mapping = aes(x = n_crops,
+  #                           y = rel_abun,
+  #                           color = species),
+  #             se = FALSE,
+  #             method = "lm") + 
+  theme_minimal()
+```
+
+# Spatial models
+## Create spatial polygons data frame
+```{r}
+us.spdf <- raster::getData('GADM', 
+                      country = 'USA', 
+                      level = 2)
+midwest.spdf <- subset(us.spdf, 
+                       NAME_1 == "Iowa" | NAME_1 == "Illinois" | NAME_1 == "Indiana" |
+                         NAME_1 == "Michigan" | NAME_1 == "Minnesota" | NAME_1 == "Wisconsin")
+countycode.df <- tibble(GID_2 = midwest.spdf@data[["GID_2"]],
+                        state = midwest.spdf@data[["NAME_1"]],
+                        county_name = midwest.spdf@data[["NAME_2"]])
+spatial.bumbles.allvars.df <- spatial.bumbles.allvars.df %>%
+  mutate(state_full = abbr2state(state)) %>%
+  left_join(countycode.df,
+            by = c("state_full" = "state",
+                   "county" = "county_name"))
+spatial.bumbles.allvars.spdf <- sp::merge(midwest.spdf,
+                                          spatial.bumbles.allvars.df,
+                                          by = "GID_2",
+                                          duplicateGeoms = TRUE) # for mult. species per county
+spatial.bumbles.allvars.spdf
+plot(midwest.spdf)
+```
+
+## Create spatial neighbor lattice/matrix
+```{r}
+test.spdf <- spatial.bumbles.allvars.spdf[!is.na(spatial.bumbles.allvars.spdf@data$species), ]
+imp.spdf <- test.spdf[test.spdf@data$species == "Bombus impatiens", ]
+imp1940.spdf <- test.spdf[test.spdf@data$year == 1940, ]
+list.test.queen <- poly2nb(imp1940.spdf, 
+                           queen = TRUE)
+weights <- nb2listw(list.test.queen,
+                    style = "W",
+                    zero.policy = TRUE)
+print(weights, zero.policy = TRUE)
+plot(weights, coordinates(imp1940.spdf))
+```
+## Standard ols regression
+```{r}
+imp.model <- lm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                   data = imp1940.spdf@data,
+                   na.action = na.exclude)
+summary(imp.model)
+```
+## Plot spatial residuals
+```{r}
+imp1940.spdf$RESIDUALS <- imp.model$residuals
+spplot(imp1940.spdf, 
+       zcol = 'RESIDUALS', 
+       col = "transparent")
+```
+
+## Moran's I test
+```{r}
+moran.lm <- lm.morantest(imp.model, 
+                         weights,
+                         alternative = "two.sided",
+                         zero.policy = TRUE)
+print(moran.lm)
+
+moran.test(imp.model$residuals, 
+           weights,
+           zero.policy = TRUE)
+```
+
+## Legrange multiplier test
+```{r}
+lm.tests <- lm.LMtests(imp.model, 
+                       weights,
+                       test = "all",
+                       zero.policy = TRUE)
+print(lm.tests)
+```
+## Spatial error model
+```{r}
+
+```
+
+## Create spatiotemporal lattice/matrix (using Spacetime) 

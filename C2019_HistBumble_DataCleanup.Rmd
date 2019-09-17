@@ -58,6 +58,7 @@ gbif.bumbles <-
   database_id_1 = gbif.bumbles.raw$gbifid,
   database_id_2 = gbif.bumbles.raw$occurrenceid,
   database_id_3 = gbif.bumbles.raw$catalognumber,
+  collector = gbif.bumbles.raw$recordedby,
   phylum = gbif.bumbles.raw$phylum,
   class = gbif.bumbles.raw$class,
   order = gbif.bumbles.raw$order,
@@ -92,6 +93,7 @@ xerc.bumbles <-
   database_id_1 = xerc.bumbles.raw$`Bee Id`,
   database_id_2 = NA,
   database_id_3 = NA,
+  collector = xerc.bumbles.raw$Observer,
   phylum = "Arthropoda",
   class =  "Insecta",
   order = "Hymenoptera",
@@ -126,12 +128,13 @@ xerc.bumbles <-
 irc.bumbles <-
   tibble(
   unique.id = seq(from = 1, to = nrow(irc.bumbles.raw)),
-  og_database = "bb_watch",
+  og_database = "uw_irc",
   database_id_1 = paste("irc", 
                         nrow(irc.bumbles.raw),
                         sep = "."),
   database_id_2 = NA,
   database_id_3 = NA,
+  collector = irc.bumbles.raw$Collector,
   phylum = "Arthropoda",
   class =  "Insecta",
   order = "Hymenoptera",
@@ -158,6 +161,13 @@ irc.bumbles <-
   database_notes_2 = irc.bumbles.raw$`Specific location (description)`,
   database_notes_3 = NA
   )
+
+irc.bumbles$species <- str_replace(irc.bumbles$species,
+                                   pattern = " \\(.*\\)",
+                                   replacement = "")
+irc.bumbles$species[irc.bumbles$species == "Bombus"] <- "Bombus auricomus"
+irc.bumbles$species[irc.bumbles$species == "Bombus impatiens Cresson"] <- "Bombus impatiens"
+irc.bumbles$species[irc.bumbles$species == "Bombus affinis Cresson"] <- "Bombus affinis"
 ```
 
 Remove original raw data from environment
@@ -465,8 +475,10 @@ analysis.bumbles.df <- all.bumbles %>%
                       "WI", 
                       "IL",
                       "MI",
-                      "IN"))
+                      "IN", 
+                      "IA"))
 table(analysis.bumbles.df$t_period)
+table(analysis.bumbles.df$species)
 ```
 
 ## Filter to relevant species, create 4 category temporal term
@@ -501,6 +513,7 @@ analysis.bumbles.df <- analysis.bumbles.df %>%
 table(analysis.bumbles.df$time_period)
 write_csv(analysis.bumbles.df,
           "./analysis_bumbles.csv")
+analysis.bumbles.df
 ```
 
 ## Plot midwest n.bumbles by county
@@ -912,3 +925,9 @@ relative.abun.2period.df %>%
 ```
 
 summary(lm(mean_delta_ra ~ mean_ag, data = test.df))
+
+
+```{r}
+unique(midwestag.vars.df$year)
+```
+

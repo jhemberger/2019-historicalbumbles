@@ -11,7 +11,7 @@
 
 
 #### Notes
-__January 7, 2018:__ Starting the initial data cleanup.  First step is to get all of the bumble bee ID's into the same format/tidy.  All 3 databases have entirely different data structure/organization.
+__January 7, 2019:__ Starting the initial data cleanup.  First step is to get all of the bumble bee ID's into the same format/tidy.  All 3 databases have entirely different data structure/organization.
 
 New data frame columns: 
 * `unique.id`
@@ -82,5 +82,39 @@ Want to explore abundance-based similiarity indices to see if communities (@ cou
 
 __August 12, 2019:__ Would be good for a state-level summary to see which states have seen the greatest changes in ag expansion/intensification along side average change in bumble bee relative abundance and estimated species richness/biotic similarity. 
 
-__August 14, 2019:__ 
+__August 19, 2019:__ calculated change in range both in terms of percent change in counties and spatial change.  Biggest story comes from historical vs. contemporary.
+
+__August 20, 2019:__ Calculated ag intensity metrics tonight.  Crop richness and evenness are pretty straightforward.  Some richness metrics of state x county x year had to be dropped as they're over 1 (counties that had so close to 0 ag that metric is far over 1).  Prop. cropland per county is also a bit off with these data.  About 1/5 of the data are over 1.  Change these values to 1 meaning entire county is under cultivation?  Fixed this - there were livestock density estimates buried in the crop proportions.  Now everything looks good! Combined and exported - ready to be combined with bumble bee data for analysis. 
+
+__August 22, 2019:__ Created a column for unique collector x species x date x location to try and standardize sampling methods.  Takes number of records down from 25,271 to 9,666... Going to take a look at diversity and relative abundance trends to see if they're similar.  If so, like Leif, will do analysis on full rather than reduced dataset.  
+
+* Diversity trends based on 5 or 8 timepoint bins are practically identical.  
+
+* Relative abundance shifts are much cleaner with reduced data set (but generally display the same pattern as the full data set).  As expected, the picture for affinis is much closer to what we might expect (constant decline after 1940) rather than an increase in the last 10 years due to increased efforts in finding it.
+
+Was going to include IRC records, but the data are a mess.  Dates wrong/missing, locality info limited.  Would add an additional ~2500 records if we can get the dates in order.  Good task for Grant on rain day. 
+
+__August 26, 2019:__ Working today on a way to marry the historical ag data with the bumble bee records given disparity in time.  
+
+Got records combined according to Ag census intervals.  Basic LMERs show some unexpected and consistent results, regardless of species: increae in crop_evenness leads to decrease in abundance, buit increase in prop_cropland or n_crops leads to increase in abundance.  Opposite of what is expected.  
+
+A couple things: crop_evenness pattern changes over time.  Also, re-binning of data makes them much more uneven.
+
+__August 29, 2019:__ Getting into shape for doing actual spatial regressions.  Issue currently: to marry data to SPDF of counties, can't have multiple species per county, nor time periods per species... each of spdf can only be of 1 county.  JK theres an argument called `duplicateGeoms` for this exact reason.  Reading is important, mmkay? 
+
+__Sept 3, 2019:__ After meeting with claudio, plan is to pursue spatial regression modeling (either SAR or SEM) for each binned year and for each species for which we have enough data.  
+
+Need to create a function that takes species and year as an input and then runs the model and summarises the output/results neatly and then run for all combinations of species/year.  For some of the ag input variables recently extracted from the ag census, we will be able to do a subset to try and point to more mechanisms of decline (that is if areal extent/crop diversity/evenness) don't pan out to be clear preditctors of relative abundance or changes in relative abundance.  
+
+Need also to create concise summary of the changes in diversity/relative abundance in the absence of any predictors (a la Leif's 2018 paper) to setup the story.
+
+**Species with sufficient data**
+1. _B. impatiens_
+2. _B. griseocollis_
+3. _B. vagans_
+4. _B. ternarius _
+5. _B. bimaculatus_
+6. _B. pensylvanicus_
+7. _B. terricola_
+8. _B. affinis_
 

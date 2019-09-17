@@ -45,7 +45,12 @@ cropcode.df <- tibble(crop_abbr = c("Brl",
                                     "Swt",
                                     "Sgc",
                                     "Tbc",
-                                    "Why"),
+                                    "Wht",
+                                    "Cat",
+                                    "Hrs",
+                                    "Hmn",
+                                    "Shp",
+                                    "Swn"),
                       crop_name = c("Barley",
                                     "Buckwheat",
                                     "Corn",
@@ -63,7 +68,12 @@ cropcode.df <- tibble(crop_abbr = c("Brl",
                                     "Sweet Potato",
                                     "Sugar Cane",
                                     "Tobacco",
-                                    "Wheat"))
+                                    "Wheat",
+                                    "Cattle",
+                                    "Horse",
+                                    "Human",
+                                    "Sheep",
+                                    "Swine"))
 ```
 
 
@@ -79,6 +89,8 @@ histag2.df <- histag2.df %>%
            into = c("crop", "year")) %>%
   left_join(cropcode.df,
             by = c("crop" = "crop_abbr"))
+histag2.df <- histag2.df %>%
+  filter(!crop %in% c("Cat", "Hrs", "Hmn", "Shp", "Swn"))
 histag2.df$year <- as.numeric(histag2.df$year)
 histag2.df
 ```
@@ -90,13 +102,84 @@ midwestag.bycrop.df <- histag2.df %>%
 midwestag.bycrop.df
 ```
 
-## Plot crop x time 
+# Calculate ag predictors (Mike's data)
+## Crop richness
 ```{r}
-midwestag.bycrop.df %>%
-  ggplot() + 
-  
+midwestag.richness.df <- midwestag.bycrop.df %>%
+  filter(prop_county != 0) %>%
+  group_by(STATE, COUNTY, year) %>%
+  summarise(n_crops = n())
+midwestag.richness.df
+```
+```{r}
+
 ```
 
+## Crop evenness (Simpson's E)
+```{r}
+midwestag.evenness.df <- midwestag.bycrop.df %>%
+  #filter(prop_county >= 0.00001) %>%
+  mutate(prop_count_rnd = round(prop_county, 
+                                digits = 8)) %>%
+  group_by(STATE, COUNTY, year) %>%
+  summarise(numerator = round(-sum((prop_county * log(prop_county)),
+                                  na.rm = TRUE),
+                              digits = 3)) %>%
+  left_join(midwestag.richness.df,
+            by = c("STATE" = "STATE", 
+                   "COUNTY" = "COUNTY", 
+                   "year" = "year")) %>%
+  mutate(crop_evenness = numerator / log(n_crops)) %>%
+  filter(crop_evenness != Inf)
+midwestag.evenness.df
+```
+```{r}
+midwestag.evenness.df %>%
+  filter(between(crop_evenness, 0, 1)) %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_point(mapping = aes(x = year, 
+                           y = crop_evenness,
+                           color = STATE)) + 
+  geom_smooth(mapping = aes(x = year, 
+                           y = crop_evenness,
+                           color = STATE),
+              method = "lm") + 
+  theme_minimal()
+```
+
+## Crop coverage (proportion of county)
+```{r}
+midwestag.cropprop.df <- midwestag.bycrop.df %>%
+  group_by(STATE, COUNTY, year) %>%
+  summarise(prop_cropland = sum(prop_county))
+midwestag.cropprop.df
+```
+
+## Combine data
+```{r}
+midwestag.vars.df <- midwestag.evenness.df %>%
+  left_join(midwestag.cropprop.df,
+            by = c("STATE" = "STATE", 
+                   "COUNTY" = "COUNTY", 
+                   "year" = "year")) %>%
+  separate(COUNTY,
+           sep = -7,
+           into = "county") %>%
+  mutate(state = STATE) %>%
+  dplyr::select(state, everything()) %>%
+  ungroup() %>%
+  dplyr::select(-STATE)
+midwestag.vars.df
+
+write_csv(midwestag.vars.df,
+          "./midwestag_vars.csv")
+```
 
 # Clean up ag census data
 ## Load in raw data
@@ -220,21 +303,6 @@ export.plots()
 ```
 
 
-```{r}
-histag.ag.test <- histag.plot.df %>%
-  filter(stat == "RATIO")
-histag.ag.test$year <- as.numeric(histag.ag.test$year)
-base.us.state +
-  geom_polygon(data = histag.ag.test,
-               mapping = aes(fill = ag_stat_value)) + 
-  scale_fill_distiller(palette = "Greens", 
-                       direction = 1) + 
-  labs(title = "Year: {frame_time}") + 
-  transition_time(year) + 
-  ease_aes("linear")
-```
-
-
 Proportion of Dane county 
 ```{r}
 histag.df %>%
@@ -293,20 +361,20 @@ midwestag.plot
 # Calculate change in ag over time
 ## Demo w/1 county
 ```{r}
-midwestag.df <- midwestag.df %>%
-  # filter(CNTY_NAME == "Columbia" & STATE_NAME == "Wisconsin" & stat == "RATIO") %>%
+midwestag.df %>%
+  filter(CNTY_NAME == "Columbia" & STATE_NAME == "Wisconsin" & stat == "RATIO") %>%
   group_by(STATE_NAME, CNTY_NAME, stat) %>%
   arrange(STATE_NAME, CNTY_NAME, year) %>%
-  # filter(stat == "RATIO") %>%
-  mutate(ag_delta = ag_stat_value - lag(ag_stat_value))
-  # summarise(mean_ag_delta = mean(ag_delta,
-  #                                na.rm = TRUE)) %>%
-  # ggplot() +
-  # geom_histogram(mapping = aes(x = mean_ag_delta)) +
-  # theme_minimal()
-midwestag.df
-write_csv(midwestag.df,
-          "./midwestag.csv")
+  filter(stat == "RATIO") %>%
+  mutate(ag_delta = ag_stat_value - lag(ag_stat_value)) %>%
+  summarise(mean_ag_delta = mean(ag_delta,
+                                 na.rm = TRUE)) %>%
+  ggplot() +
+  geom_histogram(mapping = aes(x = mean_ag_delta)) +
+  theme_minimal()
+# midwestag.df
+# write_csv(midwestag.df,
+#           "./midwestag.csv")
 ```
 
 # Yields of corn over time

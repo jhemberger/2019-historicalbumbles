@@ -109,10 +109,27 @@ midwestag.richness.df <- midwestag.bycrop.df %>%
   filter(prop_county != 0) %>%
   group_by(STATE, COUNTY, year) %>%
   summarise(n_crops = n())
-midwestag.richness.df
+midwestag.richness.df %>%
+  group_by(year) %>%
+  summarise(mean = mean(n_crops),
+            sd = sd(n_crops))
 ```
 ```{r}
-
+midwestag.richness.df %>%
+  mutate(year.char = as.character(year)) %>%
+ggplot(mapping = aes(x = year.char, 
+                             y = n_crops)) + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_boxplot(outlier.shape = NA) +
+  #geom_point() +
+  stat_summary(fun.data = "mean_cl_boot", geom = "pointrange",
+                     colour = "red", size = 0.5) + 
+  theme_minimal_hgrid()
 ```
 
 ## Crop evenness (Simpson's E)
@@ -150,7 +167,7 @@ ggplot() +
                            y = crop_evenness,
                            color = STATE),
               method = "lm") + 
-  theme_minimal()
+  theme_minimal_hgrid()
 ```
 
 ## Crop coverage (proportion of county)
@@ -158,7 +175,29 @@ ggplot() +
 midwestag.cropprop.df <- midwestag.bycrop.df %>%
   group_by(STATE, COUNTY, year) %>%
   summarise(prop_cropland = sum(prop_county))
-midwestag.cropprop.df
+midwestag.cropprop.df %>%
+  group_by(year) %>%
+  summarise(mean = mean(prop_cropland),
+            sd = sd(prop_cropland))
+```
+
+```{r}
+midwestag.cropprop.df %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_point(mapping = aes(x = year, 
+                           y = prop_cropland,
+                           color = STATE)) + 
+  geom_smooth(mapping = aes(x = year, 
+                           y = prop_cropland,
+                           color = STATE),
+              method = "lm") + 
+  theme_minimal_hgrid()
 ```
 
 ## Combine data
@@ -179,6 +218,62 @@ midwestag.vars.df
 
 write_csv(midwestag.vars.df,
           "./midwestag_vars.csv")
+```
+
+## Visualize other data (From ag census records) 
+```{r}
+midwestag.othervars.df
+midwestag.othervars.df %>%
+  filter(countyicp != 0) %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_point(mapping = aes(x = year, 
+                           y = cloverac,
+                           color = state_name)) + 
+  geom_smooth(mapping = aes(x = year, 
+                           y = cloverac,
+                           color = state_name),
+              method = "loess") + 
+  theme_minimal_hgrid()
+midwestag.othervars.df %>%
+  filter(countyicp != 0) %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_point(mapping = aes(x = year, 
+                           y = pastureac,
+                           color = state_name)) + 
+  geom_smooth(mapping = aes(x = year, 
+                           y = pastureac,
+                           color = state_name),
+              method = "loess") + 
+  theme_minimal_hgrid()
+midwestag.othervars.df %>%
+  filter(avgfarm < 10000) %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_point(mapping = aes(x = year, 
+                           y = avgfarm,
+                           color = state_name)) + 
+  geom_smooth(mapping = aes(x = year, 
+                           y = avgfarm,
+                           color = state_name),
+              method = "loess") + 
+  theme_minimal_hgrid()
 ```
 
 # Clean up ag census data
@@ -345,6 +440,13 @@ midwestag.plot <- ggplot() +
                color = "gray80",
                size = 0.25,
                na.rm = TRUE) + 
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y =lat,
+                             group = group),
+               fill = "transparent",
+               color = "gray80",
+               size = 0.25) +
   scale_fill_distiller(palette = "Oranges",
                        direction = 1,
                        limits = c(0,1),
@@ -356,7 +458,54 @@ midwestag.plot <- ggplot() +
              ncol = 5) +
   theme_void()
 midwestag.plot
+ggsave("./model_plots/agovertime.eps",
+       midwestag.plot,
+       width = 10,
+       height = 10)
 ```
+
+## Plot crop richness over time
+```{r}
+midwestag.richness.plot.df <- midwestag.richness.df %>%
+  left_join(us.county.midwest %>%
+              mutate(CNTY_NAME = paste(CNTY_NAME,
+                                       "County",
+                                       sep = " ")),
+            by = c("COUNTY" = "CNTY_NAME"))
+midwestag.richness.plot.df
+
+midwestag.richness.plot <- ggplot() +
+  geom_polygon(data = midwestag.richness.plot.df,
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = n_crops),
+               color = "gray80",
+               size = 0.25,
+               na.rm = TRUE) + 
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y =lat,
+                             group = group),
+               fill = "transparent",
+               color = "gray80",
+               size = 0.25) +
+  scale_fill_distiller(palette = "Purples",
+                       direction = 1,
+                       na.value = "transparent",
+                       name = "Number of Crops Grown") + 
+  coord_map("stereographic") + 
+  labs(title = "Number of crops grown per county") + 
+  facet_wrap(~ year,
+             ncol = 5) +
+  theme_void()
+midwestag.richness.plot
+ggsave("./model_plots/richovertime.eps",
+       midwestag.richness.plot,
+       width = 10,
+       height = 10)
+```
+
 
 # Calculate change in ag over time
 ## Demo w/1 county

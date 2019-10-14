@@ -34,6 +34,8 @@ library(coin)
 library(rbin)
 library(directlabels)
 library(spdep)
+library(spatialreg)
+library(spdplyr)
 ```
 
 # Import data
@@ -42,15 +44,26 @@ spatial.bumbles.df <- read_csv("./spatial_bumbles.csv") %>%
   dplyr::select(date, year, species, subgenus, dec_lat, dec_long, state, county, region, decade, t_period, time_period, 
                 bin_3, bin_5, bin_8, collector_spp_date)
 midwestag.vars.df <- read_csv("./midwestag_vars.csv")
-midwestag.vars.df
-spatial.bumbles.df
+midwestag.othervars.df <- read_csv("./agvars_other.csv",
+                                   col_types = list(col_double(),
+                                                    col_character(),
+                                                    col_character(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double()))
 ```
 
-## Match bumble records to ag census period
-### Create time bin for each ag census period
+# Match bumble records to ag census period
+## Create time bin for each ag census period & common vs. rare category
 ```{r}
 spatial.bumbles.df <- spatial.bumbles.df %>%
-   mutate(bin_ag = case_when(
+  mutate(bin_ag = case_when(
     year <= 1845 ~ 1840,
     between(year, 1846, 1855) ~ 1850,
     between(year, 1856, 1865) ~ 1860,
@@ -68,17 +81,72 @@ spatial.bumbles.df <- spatial.bumbles.df %>%
     between(year, 1976, 1985) ~ 1982,
     between(year, 1986, 1995) ~ 1992, 
     between(year, 1996, 2005) ~ 2002,
-    between(year, 2006, 2019) ~ 2012))
+    between(year, 2006, 2019) ~ 2012),
+    cmn.rare = if_else(species %in% c("Bombus impatiens",
+                                      "Bombus bimaculatus",
+                                      "Bombus griseocollis",
+                                      "Bombus vagans",
+                                      "Bombus ternarius",
+                                      "Bombus auricomus"),
+                       "common",
+                       if_else(species %in% c("Bombus terricola",
+                                              "Bombus affinis",
+                                              "Bombus pensylvanicus"),
+                               "rare",
+                               "uncommon")))
 spatial.bumbles.df
 ```
 
-### Option to limit analysis by `collector_spp_date`
+## Option to limit analysis by `collector_spp_date`
 ```{r}
-spatial.bumbles.df <- spatial.bumbles.df %>%
+spatial.bumbles.red.df <- spatial.bumbles.df %>%
   distinct(collector_spp_date,
            .keep_all = TRUE) 
+spatial.bumbles.red.df
+```
+### Summarize data by `bin_5` 
+(Relative abundance of species in each county at each `bin_5`)
+```{r}
+spatial.bumbles.ra.df <- spatial.bumbles.red.df %>%
+  group_by(species, subgenus, state, county, decade, bin_5) %>%
+  summarise(species_abun = n()) %>%
+  ungroup() %>%
+  left_join(spatial.bumbles.df %>%
+              group_by(state, county, bin_5) %>%
+              summarise(bin_5_abundance = n()),
+            by = c("bin_5" = "bin_5",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  mutate(rel_abun = species_abun / bin_5_abundance)
+sum(spatial.bumbles.ra.df$species_abun)
+```
+### Append additional ag variables
+```{r}
+midwestag.othervars.df <- midwestag.othervars.df %>%
+  mutate(state_name = state2abbr(state_name))
+midwestag.model.df <- midwestag.vars.df %>%
+  left_join(midwestag.othervars.df,
+            by = c("state" = "state_name",
+                   "year" = "year",
+                   "county" = "county_name"))
+
 ```
 
+### Join ag census data to NEAREST date
+```{r}
+spatial.bumbles.allvars.df <- spatial.bumbles.ra.df %>%
+  ungroup() %>%
+  full_join(midwestag.model.df,
+            by = c("state" = "state",
+                   "county" = "county")) %>%
+  mutate(date_diff = abs(decade - year)) %>%
+  arrange(date_diff) %>%
+  group_by(species, state, county, bin_5) %>%
+  slice(1) %>%
+  filter(!is.na(species))
+spatial.bumbles.allvars.df
+```
+## Option to use all data
 ### Summarize data by `ag_bin` 
 (Relative abundance of species in each county at each ag census time point)
 ```{r}
@@ -108,42 +176,44 @@ spatial.bumbles.allvars.df <- spatial.bumbles.ra.df %>%
 spatial.bumbles.allvars.df
 ```
 
-## Match ag census data to bumble bins (8bin) 
-### Option to limit analysis by `collector_spp_date`
-```{r}
-spatial.bumbles.df <- spatial.bumbles.df %>%
-  distinct(collector_spp_date,
-           .keep_all = TRUE) 
-```
-
-### Summarize data by `bin_8` 
-(Relative abundance of species in each county at each `bin_8`)
+### Summarize data by `bin_5` 
+(Relative abundance of species in each county at each `bin_5`)
 ```{r}
 spatial.bumbles.ra.df <- spatial.bumbles.df %>%
-  group_by(species, subgenus, state, county, decade, bin_8) %>%
+  group_by(species, subgenus, state, county, decade, bin_5) %>%
   summarise(species_abun = n()) %>%
   ungroup() %>%
   left_join(spatial.bumbles.df %>%
-              group_by(state, county, bin_8) %>%
-              summarise(bin_8_abundance = n()),
-            by = c("bin_8" = "bin_8",
+              group_by(state, county, bin_5) %>%
+              summarise(bin_5_abundance = n()),
+            by = c("bin_5" = "bin_5",
                    "state" = "state",
                    "county" = "county")) %>%
-  mutate(rel_abun = species_abun / bin_8_abundance)
-spatial.bumbles.ra.df
-table(spatial.bumbles.ra.df$bin_8_abundance)
+  mutate(rel_abun = species_abun / bin_5_abundance)
+sum(spatial.bumbles.ra.df$species_abun)
+```
+### Append additional ag variables
+```{r}
+midwestag.othervars.df <- midwestag.othervars.df %>%
+  mutate(state_name = state2abbr(state_name))
+midwestag.model.df <- midwestag.vars.df %>%
+  left_join(midwestag.othervars.df,
+            by = c("state" = "state_name",
+                   "year" = "year",
+                   "county" = "county_name"))
+
 ```
 
 ### Join ag census data to NEAREST date
 ```{r}
 spatial.bumbles.allvars.df <- spatial.bumbles.ra.df %>%
   ungroup() %>%
-  full_join(midwestag.vars.df,
+  full_join(midwestag.model.df,
             by = c("state" = "state",
                    "county" = "county")) %>%
   mutate(date_diff = abs(decade - year)) %>%
   arrange(date_diff) %>%
-  group_by(species, state, county) %>%
+  group_by(species, state, county, bin_5) %>%
   slice(1) %>%
   filter(!is.na(species))
 spatial.bumbles.allvars.df
@@ -153,41 +223,69 @@ spatial.bumbles.allvars.df
 # Basic test models w/ `lmer`
 ## Full model, all spp., ~ relative_abun
 ```{r}
-test.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
-                     (1 | state/county) + (1 | species),
-                   data = spatial.bumbles.allvars.df,
+test.model <- lmer(scale(log(rel_abun + 1)) ~ 
+                        scale(n_crops) + 
+                        scale(crop_evenness) + 
+                        scale(prop_cropland) + 
+                        scale(avgfarm) + 
+                        scale(pastureac) + 
+                        scale(cloverac) +
+                        (1 | state) + 
+                        (1 | species),
+                   data = spatial.bumbles.model.yes0.df,
+                   weights = spatial.bumbles.model.yes0.df$bin_5_abundance,
                    na.action = na.exclude)
 summary(test.model)
 tidy(test.model)
+plot(test.model)
+qqnorm(resid(test.model))
+library(jtools)
+summ(test.model)
 ```
 
 ## Model for rare species
 ```{r}
-rarespp.df <- spatial.bumbles.allvars.df %>%
+rarespp.df <- spatial.bumbles.model.yes0.df %>%
   filter(species %in% c("Bombus affinis", 
                         "Bombus pensylvanicus",
                         "Bombus terricola"))
-rarespp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
-                     (1 | state/county) + (1 | species),
+rarespp.model <- lmer(scale(log(rel_abun + 1)) ~ 
+                        scale(n_crops) + 
+                        scale(crop_evenness) + 
+                        scale(prop_cropland) + 
+                        scale(avgfarm) + 
+                        scale(pastureac) + 
+                        scale(cloverac) +
+                        bin_5 +
+                        (1 | state) - 1,
                    data = rarespp.df,
+                   weights = rarespp.df$bin_5_abundance,
                    na.action = na.exclude)
 summary(rarespp.model)
+plot(rarespp.model)
 tidy(rarespp.model)  
 glance(rarespp.model)
 ```
 
 ## Model for common species
 ```{r}
-cmnspp.df <- spatial.bumbles.allvars.df %>%
+cmnspp.df <- spatial.bumbles.model.yes0.df %>%
   filter(species %in% c("Bombus griseocolis", 
                         "Bombus impatiens",
                         "Bombus bimaculatus", 
                         "Bombus vagans",
                         "Bombus auricomus",
                         "Bombus ternarius"))
-cmnspp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
-                     (1 | state/county) + (1 | species),
+cmnspp.model <- lmer(log(rel_abun + 1) ~ 
+                        scale(n_crops) + 
+                        scale(crop_evenness) + 
+                        scale(prop_cropland) + 
+                        scale(avgfarm) + 
+                        scale(pastureac) + 
+                        scale(cloverac) +
+                        (1 | state),
                    data = cmnspp.df,
+                   weights = cmnspp.df$bin_5_abundance,
                    na.action = na.exclude)
 summary(cmnspp.model)
 tidy(cmnspp.model)
@@ -196,7 +294,7 @@ glance(cmnspp.model)
 
 ## Model for _terricola_
 ```{r}
-rarespp.df <- spatial.bumbles.allvars.df %>%
+rarespp.df <- spatial.bumbles.model.df %>%
   filter(species %in% c("Bombus terricola"))
 rarespp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
                      (1 | state),
@@ -209,7 +307,7 @@ glance(rarespp.model)
 
 ## Model for _impatiens_
 ```{r}
-cmnspp.df <- spatial.bumbles.allvars.df %>%
+cmnspp.df <- spatial.bumbles.model.df %>%
   filter(species %in% c("Bombus impatiens"))
 cmnspp.model <- lmer(rel_abun ~ n_crops + crop_evenness + prop_cropland + 
                      (1 | state),
@@ -220,24 +318,106 @@ tidy(cmnspp.model)
 glance(cmnspp.model)
 ```
 
-
+# Add pseudo-absence counties
+## All counties for species
 ```{r}
+study.species <- c("Bombus impatiens",
+                   "Bombus bimaculatus",
+                   "Bombus griseocollis",
+                   "Bombus vagans",
+                   "Bombus ternarius",
+                   "Bombus auricomus",
+                   "Bombus pensylvanicus",
+                   "Bombus terricola",
+                   "Bombus affinis")
 spatial.bumbles.allvars.df %>%
-  ggplot() + 
-  geom_point(mapping = aes(x = bin_8,
-                           y = rel_abun,
-                           color = species)) +
-  geom_smooth(mapping = aes(x = as.numeric(factor(bin_8)),
-                            y = rel_abun,
-                          color = species),
-              method = "lm") + 
-  facet_wrap(~ species) + 
-  # geom_smooth(mapping = aes(x = n_crops,
-  #                           y = rel_abun,
-  #                           color = species),
-  #             se = FALSE,
-  #             method = "lm") + 
-  theme_minimal()
+  group_by(species, state, bin_5) %>%
+  distinct(county) %>%
+  # group_by(species) %>%
+  # summarise(n_counties = n()) %>%
+  filter(species %in% study.species)
+spatial.bumbles.allvars.df <- spatial.bumbles.allvars.df %>%
+  filter(species %in% study.species)
+unique(spatial.bumbles.allvars.df$species)
+spatial.bumbles.allvars.df
+```
+
+## Select 50 pseudo-absence counties per species x time bin
+```{r}
+# Examine how many records exist for counties not in current time bin
+select.pseudoab <- function() {
+  time.periods <- unique(spatial.bumbles.allvars.df$bin_5)
+  time.periods
+  test.list <- list()
+  for (i in time.periods) {
+    df <- spatial.bumbles.allvars.df
+    tp.df <- spatial.bumbles.allvars.df %>%
+      filter(species %in% study.species) %>% # filter only study species
+      filter(bin_5 == i) # filter not current time point
+    current.counties <- tp.df$county # counties to exclude from sample
+    df <- df %>%
+      filter(species %in% study.species) %>%
+      filter(!county %in% current.counties) %>% # remove counties present in current time point
+      group_by(species) %>% 
+      summarise(n = n()) %>%
+      mutate(current_bin_5 = i)
+    test.list[[i]] <- df
+  }
+  end.df <- bind_rows(test.list)
+  min.counties <- min(end.df$n)
+  min.species <- end.df$species[min(end.df$n)]
+  min.timebin <- end.df$current_bin_5[min(end.df$n)]
+  print(paste("The maximum psuedo-absence count is",
+              min.counties,
+              "for",
+              min.species,
+              "for the time bin",
+              min.timebin,
+              sep = " "))
+  selection.list <- list()
+  for (i in time.periods) {
+    df <- spatial.bumbles.allvars.df
+    tp.df <- spatial.bumbles.allvars.df %>%
+      filter(species %in% study.species) %>% # filter only study species
+      filter(bin_5 == i) # filter not current time point
+    current.counties <- tp.df$county # counties to exclude from sample
+    df <- df %>%
+      filter(species %in% study.species) %>%
+      filter(!county %in% current.counties) %>% # remove counties present in current time point
+      group_by(species) %>% 
+      sample_n(min.counties) %>%
+      mutate(current_bin_5 = i,
+             rel_abun = 0,
+             bin_5 = i,
+             spp_time = paste(species, 
+                             current_bin_5, 
+                             sep = " "))
+    selection.list[[i]] <- df
+  }
+  end.df <- bind_rows(selection.list)
+}
+pseudoab.df <- select.pseudoab()
+pseudoab.df
+table(pseudoab.df$species)
+pseudoab.df %>%
+  group_by(species, bin_5, current_bin_5) %>%
+  summarise(n = n())
+pseudoab.df %>%
+  filter(!is.na(year))
+```
+
+## Bind pseudo-absence records to data frame
+```{r}
+spatial.bumbles.model.no0.df <- spatial.bumbles.allvars.df
+spatial.bumbles.model.yes0.df <- spatial.bumbles.allvars.df %>%
+  bind_rows(pseudoab.df)
+spatial.bumbles.model.df %>%
+  filter(species == "Bombus terricola") %>%
+  group_by(bin_5) %>%
+  summarise(n = n())
+nrow(spatial.bumbles.model.no0.df)
+nrow(spatial.bumbles.model.yes0.df)
+
 ```
 
 # Spatial models
@@ -252,20 +432,45 @@ midwest.spdf <- subset(us.spdf,
 countycode.df <- tibble(GID_2 = midwest.spdf@data[["GID_2"]],
                         state = midwest.spdf@data[["NAME_1"]],
                         county_name = midwest.spdf@data[["NAME_2"]])
-spatial.bumbles.allvars.df <- spatial.bumbles.allvars.df %>%
+spatial.bumbles.model.no0.df <- spatial.bumbles.model.no0.df %>%
   mutate(state_full = abbr2state(state)) %>%
   left_join(countycode.df,
             by = c("state_full" = "state",
-                   "county" = "county_name"))
-spatial.bumbles.allvars.spdf <- sp::merge(midwest.spdf,
-                                          spatial.bumbles.allvars.df,
-                                          by = "GID_2",
-                                          duplicateGeoms = TRUE) # for mult. species per county
-spatial.bumbles.allvars.spdf
-plot(midwest.spdf)
+                   "county" = "county_name")) %>%
+  mutate(cm_rare = ifelse(species %in% c("Bombus impatiens",
+                                         "Bombus bimaculatus",
+                                         "Bombus grisecollis",
+                                         "Bombus vagans",
+                                         "Bombus ternarius",
+                                         "Bombus auricomus"),
+                          "common",
+                          "rare"))
+spatial.bumbles.model.yes0.df <- spatial.bumbles.model.yes0.df %>%
+  mutate(state_full = abbr2state(state)) %>%
+  left_join(countycode.df,
+            by = c("state_full" = "state",
+                   "county" = "county_name")) %>%
+  mutate(cm_rare = ifelse(species %in% c("Bombus impatiens",
+                                         "Bombus bimaculatus",
+                                         "Bombus grisecollis",
+                                         "Bombus vagans",
+                                         "Bombus ternarius",
+                                         "Bombus auricomus"),
+                          "common",
+                          "rare"))
+spatial.bumbles.model.no0.spdf <- sp::merge(midwest.spdf,
+                                             spatial.bumbles.model.no0.df,
+                                             by = "GID_2",
+                                             duplicateGeoms = TRUE) # for mult. species per county
+spatial.bumbles.model.yes0.spdf <- sp::merge(midwest.spdf,
+                                             spatial.bumbles.model.yes0.df,
+                                             by = "GID_2",
+                                             duplicateGeoms = TRUE) # for mult. species per county
+plot(spatial.bumbles.model.yes0.spdf)
+plot(spatial.bumbles.model.no0.spdf)
 ```
-
-## Create spatial neighbor lattice/matrix
+## Sample spatial model pipeline code
+### Create spatial neighbor lattice/matrix
 ```{r}
 test.spdf <- spatial.bumbles.allvars.spdf[!is.na(spatial.bumbles.allvars.spdf@data$species), ]
 imp.spdf <- test.spdf[test.spdf@data$species == "Bombus impatiens", ]
@@ -276,37 +481,41 @@ weights <- nb2listw(list.test.queen,
                     style = "W",
                     zero.policy = TRUE)
 print(weights, zero.policy = TRUE)
-plot(weights, coordinates(imp1940.spdf))
+teset<- plot(weights, coordinates(imp1940.spdf))
 ```
-## Standard ols regression
+### Standard ols regression
 ```{r}
 imp.model <- lm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
                    data = imp1940.spdf@data,
                    na.action = na.exclude)
 summary(imp.model)
+tidy(imp.model)
 ```
-## Plot spatial residuals
+### Plot spatial residuals
 ```{r}
 imp1940.spdf$RESIDUALS <- imp.model$residuals
 spplot(imp1940.spdf, 
        zcol = 'RESIDUALS', 
        col = "transparent")
+nrow(imp1940.spdf@data)
 ```
 
-## Moran's I test
+### Moran's I test
 ```{r}
 moran.lm <- lm.morantest(imp.model, 
                          weights,
                          alternative = "two.sided",
                          zero.policy = TRUE)
 print(moran.lm)
+moran.lm$p.value[1,1]
 
-moran.test(imp.model$residuals, 
-           weights,
-           zero.policy = TRUE)
+moran.test <- moran.test(imp.model$residuals, 
+                         weights,
+                         zero.policy = TRUE)
+moran.test
 ```
 
-## Legrange multiplier test
+### Legrange multiplier test
 ```{r}
 lm.tests <- lm.LMtests(imp.model, 
                        weights,
@@ -314,9 +523,906 @@ lm.tests <- lm.LMtests(imp.model,
                        zero.policy = TRUE)
 print(lm.tests)
 ```
-## Spatial error model
+
+### Spatial error model
 ```{r}
+test <- imp1940.spdf@data
+sem.model <- errorsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                                    data = imp1940.spdf@data,
+                                    listw = weights,
+                        zero.policy = TRUE)
+summary(sem.model)
+tidy(sem.model)
+test <- summary.sarlm(sem.model, Nagelkerke = TRUE)
+sem.model$coefficients
+sem.model$
+tibble(term = c("(Intercept)", "n_crops", "crop_evenness", "prop_cropland"),
+       coefficients = (summary(sem.model)$Coef[, 1]),
+       std.error = (summary(sem.model)$Coef[, 2]),
+       z.value = (summary(sem.model)$Coef[, 3]),
+       p.value = (summary(sem.model)$Coef[, 4]))
+summary(sem.model)
+remotes::install_github("leifeld/texreg")
+library(texreg)
+test <- texreg::extract(sem.model)
+test
+
+sar.model <- lagsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                                  data = imp1940.spdf@data,
+                                  listw = weights,
+                                  zero.policy = TRUE)
+summary.sarlm(sar.model, Nagelkerke = TRUE)
+
+tibble(term = c("(Intercept)", "n_crops", "crop_evenness", "prop_cropland"),
+       coefficients = (summary(sar.model)$Coef[, 1]),
+       std.error = (summary(sar.model)$Coef[, 2]),
+       z.value = (summary(sar.model)$Coef[, 3]),
+       p.value = (summary(sar.model)$Coef[, 4]))
+```
+
+ 
+## Spatial/OLS modeling function (by species)
+```{r}
+spatial.regression.spp <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species))
+  print(analysis.spdf@data %>%
+    group_by(species, bin_5) %>%
+    summarise(n = n()))
+  species <- unique(analysis.spdf@data$species)
+  year <- unique(analysis.spdf@data$bin_5)
+  species.by.year <- crossing(species, year) %>%
+    dplyr::select(species, year)
+  
+  spdf.list <- list() # Model results list that will be bound to data frame 
+
+  # Create list of spatial data frames to be analyzed
+  for (i in 1:nrow(species.by.year)) {
+    model.spdf <- analysis.spdf %>%
+      filter(species == species.by.year$species[i] & bin_5 == species.by.year$year[i])
+    spdf.list[[i]] <- model.spdf
+  }
+  spdfnames <- paste(species.by.year$species,
+                     species.by.year$year)
+  names(spdf.list) <- spdfnames
+  # analysis.df.list <- Filter(function(x) nrow(x) >= 8, df.list)
+  assign("analysis.df.list",
+         spdf.list,
+         envir = .GlobalEnv)
+
+  # Fit OLS or spatial models
+  listnumber = 1
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  for (i in spdf.list){
+    listnumber <- listnumber + 1
+    # OLS Model
+    ols.model <- lm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                    data = i@data,
+                    weights = i@data$bin_5_abundance,
+                    na.action = na.exclude)
+    ols.df <- tidy(ols.model) %>%
+      mutate(model.type = "ols",
+             species = i@data$species[1],
+             time = i@data$bin_5[1],
+             obsv = nrow(i@data)) %>%
+      dplyr::select(species, time, model.type, obsv, everything())
+    # print(ols.df)
+    modeloutput.list[[listnumber]] <- ols.model
+    # Create spatial weights matrix
+    weights.queen.list <- poly2nb(i,
+                                  queen = TRUE)
+    if (sum(unlist(weights.queen.list)) > 0){
+      weights <- nb2listw(weights.queen.list,
+                          style = "W",
+                          zero.policy = TRUE)
+      moran.test <- lm.morantest(ols.model,
+                                 weights,
+                                 alternative = "two.sided",
+                                 zero.policy = TRUE)
+      moran.pvalue <- moran.test$p.value[1, 1]
+      # SEM Model
+      sem.model <- errorsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                              data = i@data,
+                              weights = i@data$bin_5_abundance,
+                              listw = weights,
+                              zero.policy = TRUE)
+      sem.model.df <- tibble(term = c("(Intercept)",
+                                      "n_crops",
+                                      "crop_evenness",
+                                      "prop_cropland"),
+                             estimate = (summary(sem.model)$Coef[, 1]),
+                             std.error = (summary(sem.model)$Coef[, 2]),
+                             statistic = (summary(sem.model)$Coef[, 3]),
+                             p.value = (summary(sem.model)$Coef[, 4])) %>%
+        mutate(model.type = "sem",
+               species = i@data$species[1],
+               time = i@data$bin_5[1],
+               obsv = nrow(i@data)) %>%
+        dplyr::select(species, time, model.type, obsv, everything())
+      # print(sem.model.df)
+      # LAG Model
+      sar.model <- lagsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                            data = i@data,
+                            listw = weights,
+                            zero.policy = TRUE)
+      sar.model.df <- tibble(term = c("(Intercept)",
+                                      "n_crops",
+                                      "crop_evenness",
+                                      "prop_cropland"),
+                             estimate = (summary(sar.model)$Coef[, 1]),
+                             std.error = (summary(sar.model)$Coef[, 2]),
+                             statistic = (summary(sar.model)$Coef[, 3]),
+                             p.value = (summary(sar.model)$Coef[, 4])) %>%
+        mutate(model.type = "lag",
+               species = i@data$species[1],
+               time = i@data$bin_5[1],
+               obsv = nrow(i@data)) %>%
+        dplyr::select(species, time, model.type, obsv, everything())
+      # print(sar.model.df)
+      # print(moran.pvalue)
+      if (is.nan(moran.pvalue)){
+        modelresults.list[[listnumber]] <- ols.df
+      } else {
+        if (moran.pvalue < 0.05){
+          legrange.tests <- lm.LMtests(ols.model,
+                                       weights,
+                                       test = "all",
+                                       zero.policy = TRUE)
+          lmerr.pvalue <- legrange.tests$LMerr$p.value
+          lmlag.pvalue <- legrange.tests$LMlag$p.value
+          rlmerr.pvalue <- legrange.tests$RLMerr$p.value
+          rlmlag.pvalue <- legrange.tests$RLMlag$p.value
+          ifelse (lmerr.pvalue & lmlag.pvalue < 0.05,
+                  if(rlmerr.pvalue < 0.05){
+                    modelresults.list[[listnumber]] <- sem.model.df
+                  } else {
+                    modelresults.list[[listnumber]] <- sar.model.df
+                  },
+                  if (lmerr.pvalue < 0.05){
+                    modelresults.list[[listnumber]] <- sem.model.df
+                  } else {
+                    modelresults.list[[listnumber]] <- sar.model.df
+                  })
+        } else {
+          modelresults.list[[listnumber]] <- ols.df
+        }
+      }
+    }
+  }
+  results.df <- bind_rows(modelresults.list)
+  # modeloutput.list[[1]] <- NULL
+  # names(modeloutput.list) <- dfnames
+  # assign("modeloutput.list",
+  #        modeloutput.list,
+  #        envir = .GlobalEnv)
+}
+```
+## Spatial/OLS modeling function (by cm_rare)
+```{r}
+spatial.regression.cmrare <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species))
+  cm_rare <- unique(analysis.spdf@data$cm_rare)
+  year <- unique(analysis.spdf@data$bin_5)
+  cmrare.by.year <- crossing(cm_rare, year) %>%
+    dplyr::select(cm_rare, year)
+  
+  spdf.list <- list() # Model results list that will be bound to data frame 
+
+  # Create list of spatial data frames to be analyzed
+  for (i in 1:nrow(cmrare.by.year)) {
+    model.spdf <- analysis.spdf %>%
+      filter(cm_rare == cmrare.by.year$cm_rare[i] & bin_5 == cmrare.by.year$year[i])
+    spdf.list[[i]] <- model.spdf
+  }
+  spdfnames <- paste(cmrare.by.year$cm_rare,
+                     cmrare.by.year$year)
+  names(spdf.list) <- spdfnames
+  # analysis.df.list <- Filter(function(x) nrow(x) >= 8, df.list)
+  assign("analysis.df.list",
+         spdf.list,
+         envir = .GlobalEnv)
+
+  # Fit OLS or spatial models
+  listnumber = 1
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  for (i in spdf.list){
+    listnumber <- listnumber + 1
+    # OLS Model
+    ols.model <- lm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                    data = i@data,
+                    weights = i@data$bin_5_abundance,
+                    na.action = na.exclude)
+    ols.df <- tidy(ols.model) %>%
+      mutate(model.type = "ols",
+             cm_rare = i@data$cm_rare[1],
+             time = i@data$bin_5[1],
+             obsv = nrow(i@data)) %>%
+      dplyr::select(cm_rare, time, model.type, obsv, everything())
+    # print(ols.df)
+    modeloutput.list[[listnumber]] <- ols.model
+    # Create spatial weights matrix
+    weights.queen.list <- poly2nb(i,
+                                  queen = TRUE)
+    if (sum(unlist(weights.queen.list)) > 0){
+      weights <- nb2listw(weights.queen.list,
+                          style = "W",
+                          zero.policy = TRUE)
+      moran.test <- lm.morantest(ols.model,
+                                 weights,
+                                 alternative = "two.sided",
+                                 zero.policy = TRUE)
+      moran.pvalue <- moran.test$p.value[1, 1]
+      # SEM Model
+      sem.model <- errorsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                              data = i@data,
+                              weights = i@data$bin_5_abundance,
+                              listw = weights,
+                              zero.policy = TRUE)
+      sem.model.df <- tibble(term = c("(Intercept)",
+                                      "n_crops",
+                                      "crop_evenness",
+                                      "prop_cropland"),
+                             estimate = (summary(sem.model)$Coef[, 1]),
+                             std.error = (summary(sem.model)$Coef[, 2]),
+                             statistic = (summary(sem.model)$Coef[, 3]),
+                             p.value = (summary(sem.model)$Coef[, 4])) %>%
+        mutate(model.type = "sem",
+               cm_rare = i@data$cm_rare[1],
+               time = i@data$bin_5[1],
+               obsv = nrow(i@data)) %>%
+        dplyr::select(cm_rare, time, model.type, obsv, everything())
+      # print(sem.model.df)
+      # LAG Model
+      sar.model <- lagsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                            data = i@data,
+                            listw = weights,
+                            zero.policy = TRUE)
+      sar.model.df <- tibble(term = c("(Intercept)",
+                                      "n_crops",
+                                      "crop_evenness",
+                                      "prop_cropland"),
+                             estimate = (summary(sar.model)$Coef[, 1]),
+                             std.error = (summary(sar.model)$Coef[, 2]),
+                             statistic = (summary(sar.model)$Coef[, 3]),
+                             p.value = (summary(sar.model)$Coef[, 4])) %>%
+        mutate(model.type = "lag",
+               cm_rare = i@data$cm_rare[1],
+               time = i@data$bin_5[1],
+               obsv = nrow(i@data)) %>%
+        dplyr::select(cm_rare, time, model.type, obsv, everything())
+      # print(sar.model.df)
+      # print(moran.pvalue)
+      if (is.nan(moran.pvalue)){
+        modelresults.list[[listnumber]] <- ols.df
+      } else {
+        if (moran.pvalue < 0.05){
+          legrange.tests <- lm.LMtests(ols.model,
+                                       weights,
+                                       test = "all",
+                                       zero.policy = TRUE)
+          lmerr.pvalue <- legrange.tests$LMerr$p.value
+          lmlag.pvalue <- legrange.tests$LMlag$p.value
+          rlmerr.pvalue <- legrange.tests$RLMerr$p.value
+          rlmlag.pvalue <- legrange.tests$RLMlag$p.value
+          ifelse (lmerr.pvalue & lmlag.pvalue < 0.05,
+                  if(rlmerr.pvalue < 0.05){
+                    modelresults.list[[listnumber]] <- sem.model.df
+                  } else {
+                    modelresults.list[[listnumber]] <- sar.model.df
+                  },
+                  if (lmerr.pvalue < 0.05){
+                    modelresults.list[[listnumber]] <- sem.model.df
+                  } else {
+                    modelresults.list[[listnumber]] <- sar.model.df
+                  })
+        } else {
+          modelresults.list[[listnumber]] <- ols.df
+        }
+      }
+    }
+  }
+  results.df <- bind_rows(modelresults.list)
+  # modeloutput.list[[1]] <- NULL
+  # names(modeloutput.list) <- dfnames
+  # assign("modeloutput.list",
+  #        modeloutput.list,
+  #        envir = .GlobalEnv)
+}
+```
+
+## Run spatial/ols regressions
+```{r}
+# Run for all species x bin_5 combinations incl. pseudoabsences
+spatial.reg.allspp.df <- spatial.regression.spp(spdf = spatial.bumbles.model.spdf)
+
+# Run for common and rare species incl. pseudoabsences 
+spatial.reg.rarecmn.df <- spatial.regression.cmrare(spdf = spatial.bumbles.model.spdf)
+
+# Run for common and rare species omitting pseudoabsences
+spatial.reg.rarecmn.nospeudo.spdf <-
+  spatial.bumbles.model.spdf[!is.na(spatial.bumbles.model.spdf@data$rel_abun), ]
+spatial.reg.rarecmn.nospeudo.spdf <-
+  spatial.reg.rarecmn.nospeudo.spdf[spatial.reg.rarecmn.nospeudo.spdf@data$rel_abun != 0, ]
+spatial.reg.rarecmn.nopseudo.df <- spatial.regression.cmrare(spdf = spatial.reg.rarecmn.nospeudo.spdf)
+
+complete.obsv.spdf <- spatial.bumbles.model.yes0.spdf[
+    !is.na(spatial.bumbles.model.yes0.spdf@data$avgfarm), ]
+complete.obsv.spdf@data
 
 ```
 
-## Create spatiotemporal lattice/matrix (using Spacetime) 
+
+### Plot spatial/OLS regression results
+```{r}
+spatial.reg.rarecmn.df %>%
+  filter(term != "(Intercept)") %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = time,
+                                y = estimate,
+                                ymin = estimate - std.error,
+                                ymax = estimate + std.error,
+                                color = term),
+                  position = position_dodge(width = 0.9),
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = time, 
+                           y = estimate,
+                           fill = term),
+             position = position_dodge(width = 0.9),
+             shape = 21,
+             size = 4,
+             stroke = 1,
+             color = "white") + 
+  geom_text(data = spatial.reg.rarecmn.df[spatial.reg.rarecmn.df$p.value < 0.05, ],
+            mapping = aes(x = time,
+                          y = estimate),
+            label = "*",
+            position = position_dodge(width = 0.9)) +
+  theme_minimal_vgrid() + 
+  facet_wrap(~ cm_rare * term,
+             ncol = 3) + 
+  coord_flip()
+  
+```
+
+#### Plot individual responses of species to ag vars (raw)
+```{r}
+df <- spatial.bumbles.model.yes0.df
+df <- df %>%
+  filter(species == "Bombus pensylvanicus")
+table(df$bin_5)
+df %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = prop_cropland,
+                           y = log(rel_abun + 1),
+                           fill = state),
+             shape = 21,
+             color = "gray60",
+             position = position_jitter()) + 
+  geom_smooth(mapping = aes(x = prop_cropland,
+                            y = log(rel_abun + 1)),
+              method = "lm",
+              se = FALSE) + 
+  facet_wrap(~ year, ncol = 12) + 
+  theme_minimal_hgrid()
+```
+
+## Global models
+### GLMM
+```{r}
+library(fitdistrplus)
+library(glmmTMB)
+spatial.bumbles.model.no0.df <- spatial.bumbles.allvars.df
+spatial.bumbles.model.yes0.df <- spatial.bumbles.allvars.df %>%
+  bind_rows(pseudoab.df)
+complete.obsv.df <- complete.obsv.spdf@data
+complete.obvs.cm.df <- complete.obsv.df %>%
+  filter(species %in% c("Bombus impatiens",
+                        "Bombus griseocollis",
+                        "Bombus bimaculatus",
+                        "Bombus ternarius",
+                        "Bombus auricomus"))
+complete.obvs.rare.df <- complete.obsv.df %>%
+  filter(species %in% c("Bombus affinis",
+                        "Bombus terricola",
+                        "Bombus pensylvanicus"))
+global.glmm <- glm(rel_abun ~ 
+                       prop_cropland +
+                       n_crops + 
+                       avgfarm +
+                       cloverac +
+                       pastureac +
+                       year,
+                     data = complete.obsv.df,
+                     weights = complete.obsv.df$bin_5_abundance,
+                     na.action = na.exclude,
+                     family = binomial(link = "logit"))
+tidy(global.glmm)
+summary(global.glmm)
+library(car)
+test <- qqPlot(residuals(global.glmm))
+plot(test)
+residualPlots(global.glmm)
+plot(global.glmm)
+summ(global.glmm)
+plot_summs(global.glmm, rescale.distributions = TRUE, plot.distributions = TRUE)
+nrow(global.glmm$model)
+effect_plot(global.glmm, year)
+test <- predict.glm(global.glmm, 
+                    newdata = complete.obsv.df,
+                    type = "response",
+                    se.fit = TRUE,
+                    na.action = na.exclude)
+test <- bind_cols(test[1:2])
+str(test)
+crPlots(global.glmm, terms = "year")
+```
+
+
+### Spatial Error Model or OLS (w/pseudo absences)
+#### Fit models by common/rare
+```{r}
+complete.obsv.spdf <- spatial.bumbles.model.yes0.spdf[
+  !is.na(spatial.bumbles.model.yes0.spdf@data$cloverac) &
+    !is.na(spatial.bumbles.model.yes0.spdf@data$avgfarm) &
+    !is.na(spatial.bumbles.model.yes0.spdf@data$pastureac), ]
+
+cm_rare <- unique(complete.obsv.spdf@data$cm_rare)
+year <- unique(complete.obsv.spdf@data$bin_5)
+cmrare.by.year <- crossing(cm_rare, year) %>%
+  dplyr::select(cm_rare, year)
+
+spdf.list <- list() # Model results list that will be bound to data frame 
+
+# Create list of spatial data frames to be analyzed
+for (i in 1:nrow(cmrare.by.year)) {
+  model.spdf <- complete.obsv.spdf %>%
+    filter(cm_rare == cmrare.by.year$cm_rare[i] & bin_5 == cmrare.by.year$year[i])
+  spdf.list[[i]] <- model.spdf
+}
+spdfnames <- paste(cmrare.by.year$cm_rare,
+                   cmrare.by.year$year)
+names(spdf.list) <- spdfnames
+listnumber <- 0
+output.list <- list()
+model.list <- list()
+for (i in spdf.list) {
+  listnumber <- listnumber + 1
+  ols.model <- lm(rel_abun ~ scale(prop_cropland) +
+                    scale(n_crops) + 
+                    scale(crop_evenness) + 
+                    scale(avgfarm) + 
+                    scale(pastureac) + 
+                    scale(cloverac),
+                  weights = i@data$bin_5_abundance,
+                  data = i@data,
+                  na.action = na.exclude)
+  weights.queen.list <- poly2nb(i,
+                                queen = TRUE)
+  weights <- nb2listw(weights.queen.list,
+                      style = "W",
+                      zero.policy = TRUE)
+  moran.test <- lm.morantest(ols.model,
+                             weights,
+                             alternative = "two.sided",
+                             zero.policy = TRUE)
+  moran.pvalue <- moran.test$p.value[1, 1]
+  ols.model <- lm(rel_abun ~ scale(prop_cropland) +
+                    scale(n_crops) + 
+                    scale(crop_evenness) + 
+                    scale(avgfarm) + 
+                    scale(pastureac) + 
+                    scale(cloverac) - 1,
+                  weights = i@data$bin_5_abundance,
+                  data = i@data,
+                  na.action = na.exclude)
+  ols.model.df <- tidy(ols.model) %>%
+    mutate(model.type = "ols",
+           cm_rare = i@data$cm_rare[1],
+           time = i@data$bin_5[1],
+           obsv = nrow(i@data)) %>%
+    mutate(term = recode(term, 
+           `scale(prop_cropland)` = "prop_cropland",
+           `scale(n_crops)` = "n_crops",
+           `scale(crop_evenness)` = "crop_evenness",
+           `scale(avgfarm)` = "avgfarm",
+           `scale(pastureac)` = "pastureac",
+           `scale(cloverac)` = "cloverac")) %>%
+    dplyr::select(cm_rare, time, model.type, obsv, everything())
+  sem.model <- errorsarlm(rel_abun ~ scale(prop_cropland) +
+                            scale(n_crops) + 
+                            scale(crop_evenness) + 
+                            scale(avgfarm) + 
+                            scale(pastureac) + 
+                            scale(cloverac) - 1,
+                          weights = i@data$bin_5_abundance,
+                          data = i@data,
+                          listw = weights,
+                          zero.policy = TRUE,
+                          na.action = na.exclude)
+  sem.model.df <- tibble(term = c("n_crops",
+                                  "crop_evenness",
+                                  "prop_cropland",
+                                  "avgfarm",
+                                  "cloverac",
+                                  "pastureac"),
+                         estimate = (summary(sem.model)$Coef[, 1]),
+                         std.error = (summary(sem.model)$Coef[, 2]),
+                         statistic = (summary(sem.model)$Coef[, 3]),
+                         p.value = (summary(sem.model)$Coef[, 4])) %>%
+    mutate(model.type = "sem",
+           cm_rare = i@data$cm_rare[1],
+           time = i@data$bin_5[1],
+           obsv = nrow(i@data)) %>%
+    dplyr::select(cm_rare, time, model.type, obsv, everything())
+  print(moran.pvalue)
+  if (moran.pvalue < 0.05) {
+    output.list[[listnumber]] <- sem.model.df
+    model.list[[listnumber]] <- sem.model
+  } else {
+    output.list[[listnumber]] <- ols.model.df
+    model.list[[listnumber]] <- ols.model
+  }
+}
+sem.all.df <- bind_rows(output.list)
+sem.all.df
+```
+#### Fit models by subgenus (not enough data really...)
+```{r}
+complete.obsv.spdf <- spatial.bumbles.model.yes0.spdf[
+  !is.na(spatial.bumbles.model.yes0.spdf@data$cloverac) &
+    !is.na(spatial.bumbles.model.yes0.spdf@data$avgfarm) &
+    !is.na(spatial.bumbles.model.yes0.spdf@data$pastureac), ]
+
+subgenus <- unique(complete.obsv.spdf@data$subgenus)
+year <- unique(complete.obsv.spdf@data$bin_5)
+subg.by.year <- crossing(subgenus, year) %>%
+  dplyr::select(subgenus, year)
+
+spdf.list <- list() # Model results list that will be bound to data frame 
+
+# Create list of spatial data frames to be analyzed
+for (i in 1:nrow(subg.by.year)) {
+  model.spdf <- complete.obsv.spdf %>%
+    filter(subgenus == subg.by.year$subgenus[i] & bin_5 == subg.by.year$year[i])
+  spdf.list[[i]] <- model.spdf
+}
+spdfnames <- paste(subg.by.year$subgenus,
+                   subg.by.year$year)
+names(spdf.list) <- spdfnames
+listnumber <- 0
+output.list <- list()
+model.list <- list()
+for (i in spdf.list) {
+  listnumber <- listnumber + 1
+  ols.model <- lm(rel_abun ~ scale(prop_cropland) +
+                    scale(n_crops) + 
+                    scale(crop_evenness) + 
+                    scale(avgfarm) + 
+                    scale(pastureac) + 
+                    scale(cloverac),
+                  weights = i@data$bin_5_abundance,
+                  data = i@data,
+                  na.action = na.exclude)
+  weights.queen.list <- poly2nb(i,
+                                queen = TRUE)
+  weights <- nb2listw(weights.queen.list,
+                      style = "W",
+                      zero.policy = TRUE)
+  moran.test <- lm.morantest(ols.model,
+                             weights,
+                             alternative = "two.sided",
+                             zero.policy = TRUE)
+  moran.pvalue <- moran.test$p.value[1, 1]
+  ols.model <- lm(rel_abun ~ scale(prop_cropland) +
+                    scale(n_crops) + 
+                    scale(crop_evenness) + 
+                    scale(avgfarm) + 
+                    scale(pastureac) + 
+                    scale(cloverac) - 1,
+                  weights = i@data$bin_5_abundance,
+                  data = i@data,
+                  na.action = na.exclude)
+  ols.model.df <- tidy(ols.model) %>%
+    mutate(model.type = "ols",
+           subgenus = i@data$subgenus[1],
+           time = i@data$bin_5[1],
+           obsv = nrow(i@data)) %>%
+    mutate(term = recode(term, 
+           `scale(prop_cropland)` = "prop_cropland",
+           `scale(n_crops)` = "n_crops",
+           `scale(crop_evenness)` = "crop_evenness",
+           `scale(avgfarm)` = "avgfarm",
+           `scale(pastureac)` = "pastureac",
+           `scale(cloverac)` = "cloverac")) %>%
+    dplyr::select(subgenus, time, model.type, obsv, everything())
+  sem.model <- errorsarlm(rel_abun ~ scale(prop_cropland) +
+                            scale(n_crops) + 
+                            scale(crop_evenness) + 
+                            scale(avgfarm) + 
+                            scale(pastureac) + 
+                            scale(cloverac) - 1,
+                          weights = i@data$bin_5_abundance,
+                          data = i@data,
+                          listw = weights,
+                          zero.policy = TRUE,
+                          na.action = na.exclude)
+  sem.model.df <- tibble(term = c("n_crops",
+                                  "crop_evenness",
+                                  "prop_cropland",
+                                  "avgfarm",
+                                  "cloverac",
+                                  "pastureac"),
+                         estimate = (summary(sem.model)$Coef[, 1]),
+                         std.error = (summary(sem.model)$Coef[, 2]),
+                         statistic = (summary(sem.model)$Coef[, 3]),
+                         p.value = (summary(sem.model)$Coef[, 4])) %>%
+    mutate(model.type = "sem",
+           subgenus = i@data$subgenus[1],
+           time = i@data$bin_5[1],
+           obsv = nrow(i@data)) %>%
+    dplyr::select(subgenus, time, model.type, obsv, everything())
+  print(moran.pvalue)
+  if (moran.pvalue < 0.05) {
+    output.list[[listnumber]] <- sem.model.df
+    model.list[[listnumber]] <- sem.model
+  } else {
+    output.list[[listnumber]] <- ols.model.df
+    model.list[[listnumber]] <- ols.model
+  }
+}
+sem.all.df <- bind_rows(output.list)
+sem.all.df
+```
+
+#### Plot results
+```{r}
+sem.all.df %>%
+  filter(term != "(Intercept)") %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = time,
+                                y = estimate,
+                                ymin = estimate - std.error,
+                                ymax = estimate + std.error,
+                                color = term),
+                  position = position_dodge(width = 0.9),
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = time, 
+                           y = estimate,
+                           fill = term),
+             position = position_dodge(width = 0.9),
+             shape = 21,
+             size = 5,
+             stroke = 1,
+             color = "white") + 
+  geom_text(data = sem.all.df[sem.all.df$p.value < 0.05, ],
+            mapping = aes(x = time,
+                          y = estimate),
+            label = "*",
+            position = position_dodge(width = 0.9)) +
+  theme_minimal_grid() +
+  facet_wrap(~ cm_rare * term,
+             ncol = 3) + 
+  coord_flip()
+```
+
+Proportion of rare to common specices in each dataset for this project
+```{r}
+xerc.bumbles %>%
+  filter(species %in% c("Bombus impatiens",
+                        "Bombus bimaculatus",
+                        "Bombus griseocollis",
+                        "Bombus vagans",
+                        "Bombus ternarius",
+                        "Bombus auricomus",
+                        "Bombus pensylvanicus",
+                        "Bombus terricola",
+                        "Bombus affinis")) %>%
+  mutate(cm_rare = ifelse(species %in% c("Bombus impatiens",
+                                         "Bombus bimaculatus",
+                                         "Bombus griseocollis",
+                                         "Bombus vagans",
+                                         "Bombus ternarius",
+                                         "Bombus auricomus"),
+                          "common",
+                          "rare")) %>%
+  group_by(cm_rare) %>%
+  summarise(group_total = n()) %>%
+  mutate(total = sum(group_total),
+         prop = group_total / total)
+
+gbif.bumbles %>%
+  filter(species %in% c("Bombus impatiens",
+                        "Bombus bimaculatus",
+                        "Bombus griseocollis",
+                        "Bombus vagans",
+                        "Bombus ternarius",
+                        "Bombus auricomus",
+                        "Bombus pensylvanicus",
+                        "Bombus terricola",
+                        "Bombus affinis")) %>%
+  mutate(cm_rare = ifelse(species %in% c("Bombus impatiens",
+                                         "Bombus bimaculatus",
+                                         "Bombus griseocollis",
+                                         "Bombus vagans",
+                                         "Bombus ternarius",
+                                         "Bombus auricomus"),
+                          "common",
+                          "rare")) %>%
+  group_by(cm_rare) %>%
+  summarise(group_total = n()) %>%
+  mutate(total = sum(group_total),
+         prop = group_total / total)
+
+length(unique(midwestag.df$CNTY_NAME))
+```
+
+## Old function
+```{r}
+complete.obsv.spdf <- spatial.bumbles.model.spdf[
+  !is.na(spatial.bumbles.model.spdf@data$cloverac) &
+    !is.na(spatial.bumbles.model.spdf@data$avgfarm) &
+    !is.na(spatial.bumbles.model.spdf@data$pastureac), ]
+
+spatial.regression <- function(spdf, level) {
+  # resolution <- if (level == "species") {
+  #   "species"
+  # } else if (level == "cm_rare") {
+  #   "cm_rare"
+  # } else {
+  #   print("Error in model taxonomic resolution")
+  # }
+  analysis.spdf <- spdf[!is.na(spdf@data$species), ]
+  species <- unique(analysis.spdf@data[level])
+  year <- unique(analysis.spdf@data$bin_5)
+  species.by.year <- crossing(species, year) %>%
+    dplyr::select(species = level, year = year)
+  print(species.by.year)
+  df.list <- list() # Model results list that will be bound to data frame 
+  
+  # Create list of spatial data frames to be analyzed
+  for (i in 1:nrow(species.by.year)) {
+    df <- analysis.spdf %>%
+      filter({{level}} == species.by.year$species[i] & bin_5 == species.by.year$year[i])
+    df.list[[i]] <- df
+  }
+  dfnames <- paste(species.by.year$species,
+                   species.by.year$year)
+  names(df.list) <- dfnames
+  # analysis.df.list <- Filter(function(x) nrow(x) >= 8, df.list)
+  assign("analysis.df.list",
+         df.list,
+         envir = .GlobalEnv)
+  listnumber = 1
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  # OLS or spatial models
+  for (i in df.list){
+    listnumber <- listnumber + 1
+    # OLS Model
+    ols.model <- lm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                    data = i@data,
+                    na.action = na.exclude)
+    ols.df <- tidy(ols.model) %>%
+      mutate(model.type = "ols",
+             species = i@data[level][1, ],
+             time = i@data$bin_5[1],
+             obsv = nrow(i@data)) %>%
+      dplyr::select(species, time, model.type, obsv, everything())
+    # print(ols.df)
+    modeloutput.list[[listnumber]] <- ols.model
+    # Create spatial weights matrix
+    weights.queen.list <- poly2nb(i,
+                                  queen = TRUE)
+    if (sum(unlist(weights.queen.list)) > 0){
+      weights <- nb2listw(weights.queen.list,
+                          style = "W",
+                          zero.policy = TRUE)
+      moran.test <- lm.morantest(ols.model,
+                                 weights,
+                                 alternative = "two.sided",
+                                 zero.policy = TRUE)
+      moran.pvalue <- moran.test$p.value[1, 1]
+      # SEM Model
+      sem.model <- errorsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                              data = i@data,
+                              listw = weights,
+                              zero.policy = TRUE)
+      sem.model.df <- tibble(term = c("(Intercept)", 
+                                      "n_crops", 
+                                      "crop_evenness", 
+                                      "prop_cropland"),
+                             estimate = (summary(sem.model)$Coef[, 1]),
+                             std.error = (summary(sem.model)$Coef[, 2]),
+                             statistic = (summary(sem.model)$Coef[, 3]),
+                             p.value = (summary(sem.model)$Coef[, 4])) %>%
+        mutate(model.type = "sem",
+               species = i@data[level][1, ],
+               time = i@data$bin_5[1],
+               obsv = nrow(i@data)) %>%
+        dplyr::select(species, time, model.type, obsv, everything())
+      # print(sem.model.df)
+      # LAG Model
+      sar.model <- lagsarlm(rel_abun ~ n_crops + crop_evenness + prop_cropland,
+                            data = i@data,
+                            listw = weights,
+                            zero.policy = TRUE)
+      sar.model.df <- tibble(term = c("(Intercept)", 
+                                      "n_crops", 
+                                      "crop_evenness", 
+                                      "prop_cropland"),
+                             estimate = (summary(sar.model)$Coef[, 1]),
+                             std.error = (summary(sar.model)$Coef[, 2]),
+                             statistic = (summary(sar.model)$Coef[, 3]),
+                             p.value = (summary(sar.model)$Coef[, 4])) %>%
+        mutate(model.type = "lag",
+               species = i@data[level][1, ],
+               time = i@data$bin_5[1],
+               obsv = nrow(i@data)) %>%
+        dplyr::select(species, time, model.type, obsv, everything())
+      # print(sar.model.df)
+      # print(moran.pvalue)
+      if (is.nan(moran.pvalue)){
+        modelresults.list[[listnumber]] <- ols.df
+      } else {
+        if (moran.pvalue < 0.05){
+          legrange.tests <- lm.LMtests(ols.model,
+                                       weights,
+                                       test = "all",
+                                       zero.policy = TRUE)
+          lmerr.pvalue <- legrange.tests$LMerr$p.value
+          lmlag.pvalue <- legrange.tests$LMlag$p.value
+          rlmerr.pvalue <- legrange.tests$RLMerr$p.value
+          rlmlag.pvalue <- legrange.tests$RLMlag$p.value
+          ifelse (lmerr.pvalue & lmlag.pvalue < 0.05,
+                  if(rlmerr.pvalue < 0.05){ 
+                    modelresults.list[[listnumber]] <- sem.model.df
+                  } else {
+                    modelresults.list[[listnumber]] <- sar.model.df
+                  },
+                  if (lmerr.pvalue < 0.05){
+                    modelresults.list[[listnumber]] <- sem.model.df
+                  } else {
+                    modelresults.list[[listnumber]] <- sar.model.df
+                  })
+        } else {
+          modelresults.list[[listnumber]] <- ols.df
+        }
+      }
+    }
+  }
+  results.df <- bind_rows(modelresults.list)
+  # modeloutput.list[[1]] <- NULL
+  # names(modeloutput.list) <- dfnames
+  # assign("modeloutput.list",
+  #        modeloutput.list,
+  #        envir = .GlobalEnv)
+}
+
+# Run for each species x bin_5 combination incl. pseudoabsences
+spatial.reg.df <- spatial.regression(spdf = spatial.bumbles.model.spdf,
+                                     level = "species")
+
+# Run for common and rare species incl. pseudoabsences 
+spatial.reg.rarecmn.df <- spatial.regression(spdf = spatial.reg.rarecmn.df,
+                                             level = "cm_rare")
+
+# Run for common and rare species omitting pseudoabsences
+spatial.reg.rarecmn.nospeudo.spdf <-
+  spatial.bumbles.model.spdf[!is.na(spatial.bumbles.model.spdf@data$rel_abun), ]
+spatial.reg.rarecmn.nospeudo.spdf <-
+  spatial.reg.rarecmn.nospeudo.spdf[spatial.reg.rarecmn.nospeudo.spdf@data$rel_abun != 0, ]
+spatial.reg.rarecmn.nopseudo.df <- spatial.regression(spdf = spatial.reg.rarecmn.nospeudo.df,
+                                             level = "cm_rare")
+
+```

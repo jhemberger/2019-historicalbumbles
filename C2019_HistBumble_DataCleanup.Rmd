@@ -615,7 +615,6 @@ analysis.bumbles.spsum.df <- analysis.bumbles.df %>%
   mutate(state_name = abbr2state(state)) %>%
   filter(species %in% c("Bombus auricomus",
                         "Bombus bimaculatus",
-                        "Bombus fraternus",
                         "Bombus griseocollis",
                         "Bombus impatiens",
                         "Bombus pensylvanicus",
@@ -623,12 +622,7 @@ analysis.bumbles.spsum.df <- analysis.bumbles.df %>%
                         "Bombus variabilis",
                         "Bombus ternarius",
                         "Bombus affinis",
-                        "Bombus terricola",
-                        "Bombus borealis",
-                        "Bombus ashtoni",
-                        "Bombus fervidus",
-                        "Bombus citrinus",
-                        "Bombus rufocinctus"))
+                        "Bombus terricola"))
 midwest.bumbles.spsum.df <- full_join(ungroup(analysis.bumbles.spsum.df),
                                       ungroup(us.county.midwest),
                                       by = c("county" = "CNTY_NAME")) %>%
@@ -654,7 +648,7 @@ midwest.bumbles.spsum.plot <- ggplot() +
                color = "gray80",
                size = 0.25,
                na.rm = TRUE) + 
-  scale_fill_distiller(palette = "Reds",
+  scale_fill_distiller(palette = "Greens",
                        direction = 1,
                        na.value = "transparent") +
   coord_map("stereographic") +

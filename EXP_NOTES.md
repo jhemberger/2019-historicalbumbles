@@ -118,3 +118,67 @@ Need also to create concise summary of the changes in diversity/relative abundan
 7. _B. terricola_
 8. _B. affinis_
 
+__Sept 23, 2019:__ Have a skeleton function to automatically generate all spatial regression models based on morans I and LeGrange mult. tests.  
+
+If too complicated, will revert to function that simple runs each possible model, but includes test results in final tibble so that unnecessary/supported tests can be dropped.
+
+__Sept 24, 2019:__ Have a work flow for this function, but realizing now that if I am going to run models by each time point, we're very short of data (most data frames have < 20 points).  Models are estimating 6 parameters including fixed and spatial stuff.  
+
+Solution: run models on binned data - increases samples for the model while maintaining predictors variables per each county.  Talk to Claudio about this...
+
+__September 26, 2019:__ Spatial regression function is complete and works.  All but one species x year combination used standard OLS as the model framework (governed by moran and legrange tests).  
+
+No really strong patterns emerge - number of crops (richness) has almost zero effect across the board.  Crop evenness seems to be mostly positive (which makes sense) across species, while prop_cropland is mostly negative (which also makes sense), but we lack statistical significance in all but hyper-abundant species (_B. impatiens_).
+
+Would like to include additional counties as "pseudo-abscences".  Take historical counties and select from that set for each modeling round. 
+
+Also try: 
+1. modeling common vs. rare species as bin
+2. modeling time period only independent of species 
+3. modeling county-level species richness as a function of ag intensity 
+4. include addn'l ag metrics including pasture/clover and pesticide/input metrics (likely will need sub-models given data restraints)
+
+__October 1, 2019:__ Added pseudo absences and re-ran regressions.  Essentially the same output.  No clear trends, but maybe thats a cool story? 
+
+Am not able to include all of the additional variables extracted (e.g., clover, avg. farm size, pasture, pesticides).  Will need to run those models likely on binned data (common vs. rare) for a smaller subset of years. 
+
+To do for rest of day: build large script to bootstrap the random county selection and modeling procedure 1000 times and save output in list/df and plot average + basic 95% CI's for each estimate
+
+To create:
+1. Global model for each species regardless of time period (include bin_5 as covar)
+2. Model county-level spp. richness 
+~~3. Model common vs. rare (w/ and w/out pseudo absences)~~
+
+How to deal with abundance of zeros in model now? 
+
+__October 4, 2019:__ Just ran the first rare/common models. Most were run using SEM framework, a couple with lag, and ols as well.  I think there's a case to be made that since the majorit of models selected some sort of spatial structure that we should use SEM for all the models.  May also explore using subgenus as a bin - more biologically relevant (though the common vs rare/declining is also defensible - we would expect some similarity among species with the same trajectory)
+
+**adjust spatial reg. function (eventually) to output all pertinent materials to a list (e.g., dfs, spatial weights matricies, models, and output) as items. 
+
+__October 6, 2019:__ Built a few addintional functions/scripts that run models on binned data, as well as on data that have zeros and 1's removed (to improve normality of dataset).  
+Also have played with weighting each model observation by the total number of collection events in that time period x county as a way to say that those counties have a greater survey intensity, therefore should have records more reflective of what's actually there.  May need to figure out a way to weight by not bumble bee watch records - i think that those are skewing the results quite a bit as people are likely to report rare spp. at higher frequency. To verify this, check proportion rare to common for GBIF vs. bumble bee watch
+
+Addn'l, have scaled predictors:
+`scale(x, scale = FALSE)` centers the predictors aroudn the mean.  Intercept here is the predicted y when all predictors are at their means.  Does not change coefficient estimates, but does change intercept.
+
+`scale(x)` standardizes the predictors if they arent comparable given very different scales (e.g., proportion vs. acreage).  After, all means are 0 and variances 1.  Coefficients tell us how many SD the response changes given a 1 SD change in an independent variable when all others are held at mean.  Essentially, the largest beta coefficient is the best predictors of the response in this case (sort of - 1 SD change between predictors isn't necessarily comparable).  No need to interpret intercept - should be 0.  Must add `-1` to model formula to skip intercept. 
+
+Evenness doesn't mean what I think it does.  Peak diversity in terms of number of crops grown was right around 1900-1920.  Ever since then, declining till today where it's bewtween 2-15 crops (avg. ).  Within each county, there tends to be a specialization in crops which leads to higher evenness.  We need a better metric here.  
+
+What are the best ways to measure ag intensity? straight proportion?
+
+__October 11, 2019:__ Met with Ben Zuckerberg and his postdoc Laura.  They suggested that occupancy modeling could work for this dataset.  Additionally, suggested presence/absence modeling could be a good approach for my thesis.
+
+Met with Claudio as well, and I think a GLM for each species with the variables of interest and time are appropriate (similar to Bartomeus et al. 2013).  Weight each observation by the number of records in each county * time combination.  Additionally, try standardizing with entire dataset instead of relativizing by each temporal bin.
+
+__October 12, 2019:__ Was able to successfully run GLM models on reduced predictor set that include dhte most possible data (rel_abun ~ prop_cropland + n_crops).  Now working on plotting model effects with raw data included.  
+
+Can we plot GLM output for each species x county x time given the ag vars for each county?  This would give us a map of probability of/proportional abundance over time.
+
+
+__October 13, 2019:__
+So cool!  Got the glm function working and it also spits out predicted plots for each variable!  Some striking patterns (and super significant predictors).  
+
+Affinis surprisingly is predicted to increase over time.  Need to run model with and without bbwatch data or find a better way to standardize for rare species. 
+
+Ran models limiting to single observer x species x location x time and the results are the same (same patterns, just different power in each glm).  

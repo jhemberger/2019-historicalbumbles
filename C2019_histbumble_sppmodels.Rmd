@@ -1,0 +1,822 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Species GLMs"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# Import packages
+```{r} 
+library(tidyverse)
+library(broom)
+library(broom.mixed)
+library(rgdal)
+library(ggmap)
+library(ggalt)
+library(ggforce)
+library(cowplot)
+library(raster)
+library(maptools)
+library(maps)
+library(mapdata)
+library(mp)
+library(vegan)
+library(iNEXT)
+library(magrittr)
+library(openintro)
+library(lme4)
+library(lmerTest)
+library(coin)
+library(rbin)
+library(directlabels)
+library(spdep)
+library(spatialreg)
+library(spdplyr)
+```
+
+# Import data
+```{r}
+spatial.bumbles.df <- read_csv("./spatial_bumbles.csv") %>%
+  dplyr::select(date, year, species, subgenus, dec_lat, dec_long, state, county, region, decade, t_period, time_period, 
+                bin_3, bin_5, bin_8, collector_spp_date)
+midwestag.vars.df <- read_csv("./midwestag_vars.csv")
+midwestag.othervars.df <- read_csv("./agvars_other.csv",
+                                   col_types = list(col_double(),
+                                                    col_character(),
+                                                    col_character(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double(),
+                                                    col_double()))
+```
+
+# Match bumble records to ag census period
+## Append additional ag variables
+```{r}
+midwestag.othervars.df <- midwestag.othervars.df %>%
+  mutate(state_name = state2abbr(state_name))
+midwestag.model.df <- midwestag.vars.df %>%
+  left_join(midwestag.othervars.df,
+            by = c("state" = "state_name",
+                   "year" = "year",
+                   "county" = "county_name"))
+
+```
+## Create time bin for each ag census period & common vs. rare category
+```{r}
+spatial.bumbles.df <- spatial.bumbles.df %>%
+  mutate(bin_ag = case_when(
+    year <= 1845 ~ 1840,
+    between(year, 1846, 1855) ~ 1850,
+    between(year, 1856, 1865) ~ 1860,
+    between(year, 1866, 1875) ~ 1870,
+    between(year, 1876, 1885) ~ 1880,
+    between(year, 1886, 1895) ~ 1890,
+    between(year, 1896, 1905) ~ 1900,
+    between(year, 1906, 1915) ~ 1910,
+    between(year, 1916, 1925) ~ 1920,
+    between(year, 1926, 1935) ~ 1930,
+    between(year, 1936, 1945) ~ 1940,
+    between(year, 1946, 1955) ~ 1950,
+    between(year, 1956, 1965) ~ 1959,
+    between(year, 1966, 1975) ~ 1974,
+    between(year, 1976, 1985) ~ 1982,
+    between(year, 1986, 1995) ~ 1992, 
+    between(year, 1996, 2005) ~ 2002,
+    between(year, 2006, 2019) ~ 2012),
+    cmn.rare = if_else(species %in% c("Bombus impatiens",
+                                      "Bombus bimaculatus",
+                                      "Bombus griseocollis",
+                                      "Bombus vagans",
+                                      "Bombus ternarius",
+                                      "Bombus auricomus"),
+                       "common",
+                       if_else(species %in% c("Bombus terricola",
+                                              "Bombus affinis",
+                                              "Bombus pensylvanicus"),
+                               "rare",
+                               "uncommon")))
+spatial.bumbles.df
+```
+
+## Summarize data by `ag_bin` 
+(Relative abundance of species in each county at each ag census time point)
+```{r}
+spatial.bumbles.ra.df <- spatial.bumbles.df %>%
+  group_by(species, subgenus, state, county, bin_ag) %>%
+  summarise(species_abun = n()) %>%
+  ungroup() %>%
+  left_join(spatial.bumbles.df %>%
+              group_by(state, county, bin_ag) %>%
+              summarise(bin_ag_abundance = n()),
+            by = c("bin_ag" = "bin_ag",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  mutate(rel_abun = species_abun / bin_ag_abundance)
+spatial.bumbles.ra.df
+```
+
+## Join ag census data
+```{r}
+spatial.bumbles.glmvars.df <- spatial.bumbles.ra.df %>%
+  ungroup() %>%
+  left_join(midwestag.model.df,
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  filter(bin_ag_abundance > 5) # tuner for minimum number of records per county
+spatial.bumbles.glmvars.df
+```
+
+## Summarize data by `bin_5`
+## OPTION: Limit data to unique collector x time x location x species obsv
+```{r}
+spatial.bumbles.red.df <- spatial.bumbles.df %>%
+  distinct(collector_spp_date,
+           .keep_all = TRUE) 
+
+spatial.bumbles.ra.red.df <- spatial.bumbles.red.df %>%
+  group_by(species, subgenus, state, county, bin_ag) %>%
+  summarise(species_abun = n()) %>%
+  ungroup() %>%
+  left_join(spatial.bumbles.df %>%
+              group_by(state, county, bin_ag) %>%
+              summarise(bin_ag_abundance = n()),
+            by = c("bin_ag" = "bin_ag",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  mutate(rel_abun = species_abun / bin_ag_abundance)
+
+spatial.bumbles.glmvars.red.df <- spatial.bumbles.ra.red.df %>%
+  ungroup() %>%
+  left_join(midwestag.model.df,
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  filter(bin_ag_abundance > 5) # tuner for minimum number of records per county
+spatial.bumbles.glmvars.red.df
+```
+
+# Fit GLMs to relative abundance
+## GLM function
+```{r}
+species.glms <- function(data) {
+  species.list <- as.list(unique(data$species))
+  glm.list <- list()
+  df.list <- list()
+  trend.plots.list <- list()
+  propag.plots.list <- list()
+  ncrops.plots.list <- list()
+  for (i in species.list) {
+    model.df <- data %>%
+      filter(species == i) %>%
+      filter(!is.na(species)) %>%
+      filter(!is.na(prop_cropland))
+    # print(model.df)
+    glm.model <- glm(rel_abun ~
+                       n_crops + 
+                       prop_cropland +
+                       # avgfarm + 
+                       # cloverac + 
+                       # pastureac + 
+                       bin_ag,
+                     data = model.df,
+                     weights = model.df$bin_ag_abundance,
+                     na.action = na.exclude,
+                     family = binomial(link = "logit"))
+    glm.df <- tidy(glm.model) %>%
+      mutate(n_records = nrow(glm.model$model)) %>%
+      dplyr::select(term, 
+                    n_records, 
+                    everything())
+    # glmqq.plot <- qqPlot(residuals(glm.model))
+    # resid.plot <- plot(glm.model)
+    glm.list[[i]] <- glm.model
+    df.list[[i]] <- glm.df
+    
+    predict <- predictorEffects(glm.model,
+                                axes = list(x = list(rug = TRUE)),
+                                se = list(compute = TRUE))
+    predict.df <- bind_rows(as.tibble(predict$n_crops) %>%
+                              rename(new_x = n_crops) %>%
+                              mutate(var = "n_crops"), 
+                            as.tibble(predict$prop_cropland) %>%
+                              rename(new_x = prop_cropland) %>%
+                              mutate(var = "prop_cropland"),
+                            as.tibble(predict$bin_ag) %>%
+                              rename(new_x = bin_ag) %>%
+                              mutate(var = "bin_ag"))
+    trend.plot <- ggplot() + 
+      geom_point(data = model.df ,
+                 mapping = aes(x = bin_ag,
+                               y = rel_abun),
+                 shape = 21,
+                 fill = "black",
+                 color = "black",
+                 alpha = 1,
+                 position = position_jitter(width = 1.5)) + 
+      geom_ribbon(data = predict.df %>%
+                    filter(var == "bin_ag"),
+                  mapping = aes(x = new_x,
+                                ymin = lower,
+                                ymax = upper),
+                  fill = "#F22B29",
+                  color = "black",
+                  alpha = 1) +
+      geom_line(data = predict.df %>%
+                  filter(var == "bin_ag"),
+                mapping = aes(x = new_x,
+                              y = fit),
+                size = 1.25,
+                color = "#F22B29") + 
+      geom_rug(data = spatial.bumbles.df %>%
+                 filter(species == i) %>%
+                 mutate(rel_abun = 0),
+               mapping = aes(x = year,
+                             y = rel_abun),
+               sides = "b",
+               alpha = 1/2,
+               position = "jitter") + 
+      theme_minimal_grid() + 
+      scale_x_continuous(limits = c(1870, 2020),
+                         breaks = seq(1870, 2020, by = 20)) +
+      ylab(label = "Proportional Abundance") + 
+      xlab(label = "Year") + 
+      labs(title = paste(i,
+                         "proportional abundance 1870-present",
+                         sep = " "))
+      ggsave(plot = trend.plot,
+             filename = paste("./model_plots/trends/",
+                              i,
+                              ".eps",
+                              sep = ""),
+             height = 3,
+             width = 5)
+    
+    propag.plot <- ggplot() + 
+      geom_point(data = model.df ,
+                 mapping = aes(x = prop_cropland,
+                               y = rel_abun),
+                 shape = 21,
+                 fill = "black",
+                 color = "black",
+                 alpha = 1,
+                 position = position_jitter()) + 
+      geom_ribbon(data = predict.df %>%
+                    filter(var == "prop_cropland"),
+                  mapping = aes(x = new_x,
+                                ymin = lower,
+                                ymax = upper),
+                  fill = "#F49D37",
+                  color = "black",
+                  alpha = 1) +
+      geom_line(data = predict.df %>%
+                  filter(var == "prop_cropland"),
+                mapping = aes(x = new_x,
+                              y = fit),
+                size = 1.25,
+                color = "#F49D37") + 
+      theme_minimal_grid() + 
+      # scale_x_continuous(limits = c(1870, 2020),
+      #                    breaks = seq(1870, 2020, by = 20)) +
+      ylab(label = "Proportional Abundance") + 
+      xlab(label = "Proportion of county in agriculture") + 
+      labs(title = i)
+      ggsave(plot = propag.plot,
+             filename = paste("./model_plots/pcropland/",
+                              i,
+                              ".eps",
+                              sep = ""),
+             height = 3,
+             width = 5)
+    
+    ncrop.plot <- ggplot() + 
+      geom_point(data = model.df ,
+                 mapping = aes(x = n_crops,
+                               y = rel_abun),
+                 shape = 21,
+                 fill = "black",
+                 color = "black",
+                 alpha = 1,
+                 position = position_jitter()) + 
+      geom_ribbon(data = predict.df %>%
+                    filter(var == "n_crops"),
+                  mapping = aes(x = new_x,
+                                ymin = lower,
+                                ymax = upper),
+                  fill = "#140F2D",
+                  color = "black",
+                  alpha = 1) +
+      geom_line(data = predict.df %>%
+                  filter(var == "n_crops"),
+                mapping = aes(x = new_x,
+                              y = fit),
+                size = 1.25,
+                color = "#140F2D") + 
+      theme_minimal_grid() + 
+      # scale_x_continuous(limits = c(1870, 2020),
+      #                    breaks = seq(1870, 2020, by = 20)) +
+      ylab(label = "Proportional Abundance") + 
+      xlab(label = "Number of crops grown") + 
+      labs(title = i)
+      ggsave(plot = ncrop.plot,
+             filename = paste("./model_plots/ncrops/",
+                              i,
+                              ".eps",
+                              sep = ""),
+             height = 3,
+             width = 5)
+    print(trend.plot)
+    print(propag.plot)
+    print(ncrop.plot)
+    trend.plots.list[[i]] <- trend.plot
+    propag.plots.list[[i]] <- propag.plot
+    ncrops.plots.list[[i]] <- ncrop.plot
+  }
+  assign("glm.output.list",
+         glm.list,
+         envir = .GlobalEnv)
+  assign("glm.df.list",
+         df.list,
+         envir = .GlobalEnv)
+  assign("glm.trendplots.list",
+         trend.plots.list,
+         envir = .GlobalEnv)
+}
+```
+
+### Fit plot fodder
+```{r}
+range.ncrops <- range(model.df$n_crops)
+    range.prop_cropland <- range(model.df$prop_cropland)
+    range.bin_ag <- range(model.df$bin_ag)
+    bin_ag.x <- seq(range.bin_ag[1], 
+                    range.bin_ag[2], 
+                    by = 1)
+    ncrops.x <- seq(range.ncrops[1], 
+                    range.ncrops[2], 
+                    by = 1, 
+                    length.out = length(bin_ag.))
+    prop_crop.x <- seq(range.prop_cropland[1], 
+                       range.prop_cropland[2], 
+                       by = 0.01, length.out = 
+                         length(bin_ag))
+    fit.list <- predict.glm(glm.model,
+                            newdata = list(n_crops = ncrops.x,
+                                           prop_cropland = prop_crop.x,
+                                           bin_ag = bin_ag.x),
+                            type = "response",
+                            se.fit = TRUE)
+    fit <- fit.list[["fit"]]
+    se <- fit.list[["se.fit"]]
+    fit.df <- tibble(fit = fit,
+                     se = se,
+                     bin_ag = model.df$bin_ag,
+                     rel_abun = model.df$rel_abun)
+    # temp.list <- list(fit, se, model.df$bin_ag, model.df$rel_abun)
+    # fit.df <- bind_cols(temp.list)
+    # colnames(fit.df) <- c("fit", "se", "bin_ag", "rel_abun")
+    fit.plot <- fit.df %>%
+      ggplot() +
+      geom_point(mapping = aes(x = bin_ag,
+                               y = rel_abun),
+                 shape = 21,
+                 color = "black",
+                 fill = "tomato",
+                 size = 2) +
+      geom_line(mapping = aes(x = bin_ag,
+                              y = fit)) +
+      geom_ribbon(mapping = aes(x = bin_ag,
+                                ymin = fit - se,
+                                ymax = fit + se),
+                  color = "tomato",
+                  alpha = 0.4)
+    plot(fit.plot)
+    plot.list[[i]] <- fit.plot
+```
+
+## Run GLM function
+```{r}
+species.glms(data = spatial.bumbles.glmvars.df)
+species.glms(data = spatial.bumbles.glmvars.red.df) # reduced dataset
+```
+
+## Plot GLM coefficients
+### Use `ggplot`
+```{r}
+glm.df <- bind_rows(glm.df.list,
+                    .id = "species")
+glm.df %>%
+  filter(term != "(Intercept)") %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = term,
+                                y = estimate,
+                                ymin = estimate - std.error,
+                                ymax = estimate + std.error,
+                                color = term),
+                  position = position_dodge(width = 0.9),
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = term, 
+                           y = estimate,
+                           fill = term),
+             position = position_dodge(width = 0.9),
+             shape = 21,
+             size = 5,
+             stroke = 1,
+             color = "white") + 
+  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
+  #           mapping = aes(x = term,
+  #                         y = estimate),
+  #           label = "*",
+  #           position = position_dodge(width = 0.9)) +
+  theme_minimal_grid() +
+  facet_wrap(~ species,
+             ncol = 3) + 
+  coord_flip()
+  
+```
+
+### Use `plot_summs`
+```{r}
+list2env(glm.output.list,
+         envir = .GlobalEnv)
+
+year.coef.plot <- plot_summs(`Bombus affinis`, 
+                             `Bombus ashtoni`,
+                             `Bombus auricomus`,
+                             `Bombus bimaculatus`,
+                             `Bombus borealis`,
+                             `Bombus citrinus`,
+                             `Bombus fervidus`,
+                             `Bombus fraternus`, 
+                             `Bombus impatiens`,
+                             `Bombus pensylvanicus`,
+                             `Bombus rufocinctus`,
+                             `Bombus ternarius`,
+                             `Bombus terricola`,
+                             `Bombus vagans`,
+                             `Bombus variabilis`,
+                             model.names = c("B. affinis",
+                                             "B. ashtoni",
+                                             "B. auricomus",
+                                             "B. bimaculatus",
+                                             "B. borealis", 
+                                             "B. citrinus",
+                                             "B. fervidus",
+                                             "B. fraternus",
+                                             "B. impatiens",
+                                             "B. pensylvanicus",
+                                             "B. rufocinctus",
+                                             "B. ternarius",
+                                             "B. terricola",
+                                             "B. vagans",
+                                             "B. variablis"),
+                             coefs = c("Year" = "bin_ag"),
+                             colors = "inferno",
+                             point.shape = FALSE,
+                             plot.distributions = TRUE,
+                             rescale.distributions = FALSE)
+ncrop.coef.plot <- plot_summs(`Bombus affinis`, 
+                              `Bombus ashtoni`,
+                              `Bombus auricomus`,
+                              `Bombus bimaculatus`,
+                              `Bombus borealis`,
+                              `Bombus citrinus`,
+                              `Bombus fervidus`,
+                              `Bombus fraternus`, 
+                              `Bombus impatiens`,
+                              `Bombus pensylvanicus`,
+                              `Bombus rufocinctus`,
+                              `Bombus ternarius`,
+                              `Bombus terricola`,
+                              `Bombus vagans`,
+                              `Bombus variabilis`,
+                              model.names = c("B. affinis",
+                                              "B. ashtoni",
+                                              "B. auricomus",
+                                              "B. bimaculatus",
+                                              "B. borealis", 
+                                              "B. citrinus",
+                                              "B. fervidus",
+                                              "B. fraternus",
+                                              "B. impatiens",
+                                              "B. pensylvanicus",
+                                              "B. rufocinctus",
+                                              "B. ternarius",
+                                              "B. terricola",
+                                              "B. vagans",
+                                              "B. variablis"),
+                              coefs = c("n Crops" = "n_crops"),
+                              colors = "inferno",
+                              point.shape = FALSE,
+                              plot.distributions = TRUE,
+                              rescale.distributions = FALSE)
+propcrop.coef.plot <- plot_summs(`Bombus affinis`, 
+                                 `Bombus ashtoni`,
+                                 `Bombus auricomus`,
+                                 `Bombus bimaculatus`,
+                                 `Bombus borealis`,
+                                 `Bombus citrinus`,
+                                 `Bombus fervidus`,
+                                 `Bombus fraternus`, 
+                                 `Bombus impatiens`,
+                                 `Bombus pensylvanicus`,
+                                 `Bombus rufocinctus`,
+                                 `Bombus ternarius`,
+                                 `Bombus terricola`,
+                                 `Bombus vagans`,
+                                 `Bombus variabilis`,
+                                 model.names = c("B. affinis",
+                                                 "B. ashtoni",
+                                                 "B. auricomus",
+                                                 "B. bimaculatus",
+                                                 "B. borealis", 
+                                                 "B. citrinus",
+                                                 "B. fervidus",
+                                                 "B. fraternus",
+                                                 "B. impatiens",
+                                                 "B. pensylvanicus",
+                                                 "B. rufocinctus",
+                                                 "B. ternarius",
+                                                 "B. terricola",
+                                                 "B. vagans",
+                                                 "B. variablis"),
+                                 coefs = c("Proportion cropland per county" = "prop_cropland"),
+                                 colors = "inferno",
+                                 point.shape = FALSE,
+                                 plot.distributions = TRUE,
+                                 rescale.distributions = FALSE)
+year.coef.plot
+ncrop.coef.plot
+propcrop.coef.plot
+```
+
+# Fit GLMs to species richness
+## Prep data
+```{r}
+spatial.bumbles.diverity.df <- spatial.bumbles.df %>%
+  group_by(state, county, bin_ag) %>%
+  distinct(species, .keep_all = TRUE) %>%
+  summarise(n_species = n()) %>%
+  left_join(midwestag.model.df,
+            by = c("state" = "state",
+                   "county" = "county",
+                   "bin_ag" = "year")) %>%
+  left_join(spatial.bumbles.df %>%
+              ungroup() %>%
+              group_by(bin_ag) %>%
+              summarise(n_records = n()),
+            by = c("bin_ag" = "bin_ag")) %>%
+  filter(bin_ag < 2003)
+
+spatial.bumbles.diverity.df
+
+```
+
+```{r}
+diversity.glms <- function(data) {
+  trend.plots.list <- list()
+  propag.plots.list <- list()
+  ncrops.plots.list <- list()
+  glm.list <- list()
+  df.list <- list()
+  model.df <- data %>%
+    filter(!is.na(prop_cropland))
+  # print(model.df)
+  glm.model <- glm(n_species ~
+                     n_crops + 
+                     prop_cropland +
+                     # avgfarm + 
+                     # cloverac + 
+                     # pastureac + 
+                     bin_ag,
+                   data = model.df,
+                   weights = model.df$n_records,
+                   na.action = na.exclude,
+                   family = poisson(link = "log"))
+  glm.df <- tidy(glm.model) %>%
+    mutate(n_records = nrow(glm.model$model)) %>%
+    dplyr::select(term, 
+                  n_records, 
+                  everything())
+  # glmqq.plot <- qqPlot(residuals(glm.model))
+  # resid.plot <- plot(glm.model)
+  glm.list[[i]] <- glm.model
+  df.list[[i]] <- glm.df
+  
+  predict <- predictorEffects(glm.model,
+                              axes = list(x = list(rug = TRUE)),
+                              se = list(compute = TRUE))
+  predict.df <- bind_rows(as.tibble(predict$n_crops) %>%
+                            rename(new_x = n_crops) %>%
+                            mutate(var = "n_crops"), 
+                          as.tibble(predict$prop_cropland) %>%
+                            rename(new_x = prop_cropland) %>%
+                            mutate(var = "prop_cropland"),
+                          as.tibble(predict$bin_ag) %>%
+                            rename(new_x = bin_ag) %>%
+                            mutate(var = "bin_ag"))
+  trend.plot <- ggplot() + 
+    geom_point(data = model.df ,
+               mapping = aes(x = bin_ag,
+                             y = n_species),
+               shape = 21,
+               fill = "black",
+               color = "black",
+               alpha = 1,
+               position = position_jitter(width = 1.5)) + 
+    geom_ribbon(data = predict.df %>%
+                  filter(var == "bin_ag"),
+                mapping = aes(x = new_x,
+                              ymin = lower,
+                              ymax = upper),
+                fill = "#F22B29",
+                color = "black",
+                alpha = 1) +
+    geom_line(data = predict.df %>%
+                filter(var == "bin_ag"),
+              mapping = aes(x = new_x,
+                            y = fit),
+              size = 1.25,
+              color = "#F22B29") + 
+    theme_minimal_grid() + 
+    scale_x_continuous(limits = c(1870, 2020),
+                       breaks = seq(1870, 2020, by = 20)) +
+    ylab(label = "Estimated species richness") + 
+    xlab(label = "Year")
+  ggsave(plot = trend.plot,
+         filename = "./model_plots/diversity/trend/diversity.eps",
+         height = 3,
+         width = 5)
+  
+  propag.plot <- ggplot() + 
+    geom_point(data = model.df ,
+               mapping = aes(x = prop_cropland,
+                             y = n_species),
+               shape = 21,
+               fill = "black",
+               color = "black",
+               alpha = 1,
+               position = position_jitter()) + 
+    geom_ribbon(data = predict.df %>%
+                  filter(var == "prop_cropland"),
+                mapping = aes(x = new_x,
+                              ymin = lower,
+                              ymax = upper),
+                fill = "#F49D37",
+                color = "black",
+                alpha = 1) +
+    geom_line(data = predict.df %>%
+                filter(var == "prop_cropland"),
+              mapping = aes(x = new_x,
+                            y = fit),
+              size = 1.25,
+              color = "#F49D37") + 
+    theme_minimal_grid() + 
+    # scale_x_continuous(limits = c(1870, 2020),
+    #                    breaks = seq(1870, 2020, by = 20)) +
+    ylab(label = "Estimated species richness") + 
+    xlab(label = "Proportion of county in agriculture") + 
+    labs(title = i)
+  ggsave(plot = propag.plot,
+         filename = "./model_plots/diversity/prop_crop/diversity.eps",
+         height = 3,
+         width = 5)
+  
+  ncrop.plot <- ggplot() + 
+    geom_point(data = model.df ,
+               mapping = aes(x = n_crops,
+                             y = n_species),
+               shape = 21,
+               fill = "black",
+               color = "black",
+               alpha = 1,
+               position = position_jitter()) + 
+    geom_ribbon(data = predict.df %>%
+                  filter(var == "n_crops"),
+                mapping = aes(x = new_x,
+                              ymin = lower,
+                              ymax = upper),
+                fill = "#140F2D",
+                color = "black",
+                alpha = 1) +
+    geom_line(data = predict.df %>%
+                filter(var == "n_crops"),
+              mapping = aes(x = new_x,
+                            y = fit),
+              size = 1.25,
+              color = "#140F2D") + 
+    theme_minimal_grid() + 
+    # scale_x_continuous(limits = c(1870, 2020),
+    #                    breaks = seq(1870, 2020, by = 20)) +
+    ylab(label = "Estimated species richness") + 
+    xlab(label = "Number of crops grown") + 
+    labs(title = i)
+  ggsave(plot = ncrop.plot,
+         filename = "./model_plots/diversity/ncrops/diversity.eps",
+         height = 3,
+         width = 5)
+  print(trend.plot)
+  print(propag.plot)
+  print(ncrop.plot)
+  trend.plots.list[[i]] <- trend.plot
+  propag.plots.list[[i]] <- propag.plot
+  ncrops.plots.list[[i]] <- ncrop.plot
+  assign("glm.diversity.output.list",
+         glm.list,
+         envir = .GlobalEnv)
+  assign("glm.diversity.df.list",
+         df.list,
+         envir = .GlobalEnv)
+  assign("glm.diversity.trendplots.list",
+         trend.plots.list,
+         envir = .GlobalEnv)
+}
+```
+
+## Run GLM Function
+```{r}
+diversity.glms(spatial.bumbles.diverity.df)
+```
+
+
+
+# Create predicted rel_abun map
+```{r}
+pred.relabun <- function(model.list) {
+  pred.list <- list()
+  years.list <- list()
+  years <- unique(midwestag.model.df$year)
+  for (i in 1:length(model.list)) {
+    for(j in years) {
+      newdata.df <- midwestag.model.df %>%
+        filter(year == j) %>%
+        mutate(bin_ag = year)
+      predict <- predict.glm(object = model.list[[i]],
+                             newdata = newdata.df,
+                             type = "response",
+                             na.action = na.pass)
+      predict.df <- tibble(rel_abun = predict,
+                           species = names(glm.output.list[i]),
+                           county = newdata.df$county,
+                           state = newdata.df$state,
+                           year = j)
+      pred.list[[j]] <- predict.df
+    }
+    years.list[[i]] <- bind_rows(pred.list)
+  }
+  relabun_bycty.df <- bind_rows(years.list)
+  assign("relabun_bycty.df",
+         relabun_bycty.df,
+         envir = .GlobalEnv)
+}
+pred.relabun(glm.output.list)
+```
+
+## Plot predicted relative abundance over time
+```{r}
+unique(midwestag.model.df$year)
+relabun_bycty.red.df <- relabun_bycty.df %>%
+  filter(year %in% c(1870, 1900, 1930, 1959, 1974, 2012)) %>%
+  filter(species == "Bombus impatiens")
+relabun_bycty.red.df
+
+relabun_bycty.red.df %>%
+  mutate(state_full = abbr2state(state)) %>%
+  full_join(ungroup(us.county.midwest),
+            by = c("county" = "CNTY_NAME",
+                   "state_full" = "region")) %>%
+  filter(!is.na(species)) %>%
+  ggplot() +
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = rel_abun),
+               color = "gray80",
+               size = 0.25) + 
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               color = "black",
+               fill = NA,
+               size = 0.25) + 
+  coord_map("stereographic") +
+  scale_fill_viridis_c(option = "inferno",
+                       direction = 1) + 
+  facet_grid(species ~ year) + 
+  theme_void()
+```
+

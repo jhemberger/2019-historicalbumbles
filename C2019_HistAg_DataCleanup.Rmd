@@ -19,6 +19,7 @@ library(ggmap)
 library(gridExtra)
 library(gganimate)
 library(transformr)
+library(cowplot)
 ```
 
 # Load in Mike's proportion ag data
@@ -115,21 +116,29 @@ midwestag.richness.df %>%
             sd = sd(n_crops))
 ```
 ```{r}
-midwestag.richness.df %>%
+agrichness.plot <- midwestag.richness.df %>%
   mutate(year.char = as.character(year)) %>%
-ggplot(mapping = aes(x = year.char, 
-                             y = n_crops)) + 
+ggplot() + 
   # geom_point(mapping = aes(x = year, 
   #                          y = n_crops,
   #                          color = STATE)) + 
-  # geom_smooth(mapping = aes(x = year, 
-  #                          y = n_crops,
-  #                          color = STATE)) + 
-  geom_boxplot(outlier.shape = NA) +
-  #geom_point() +
-  stat_summary(fun.data = "mean_cl_boot", geom = "pointrange",
-                     colour = "red", size = 0.5) + 
-  theme_minimal_hgrid()
+  geom_smooth(mapping = aes(x = year,
+                           y = n_crops,
+                           color = STATE),
+              se = FALSE) +
+  # geom_boxplot(outlier.shape = NA) +
+  # stat_summary(fun.data = "mean_cl_boot", geom = "pointrange",
+  #                    colour = "red", size = 0.5) + 
+  xlab(label = "Year") +
+  ylab(label = "Number of crops grown") + 
+  scale_x_continuous(limits = c(1870, 2010),
+                     breaks = seq(1870, 2010, by = 20)) + 
+  theme_minimal()
+  ggsave("./model_plots/agrichness_trend.eps",
+         plot = agrichness.plot,
+         height = 2,
+         width = 4)
+agrichness.plot
 ```
 
 ## Crop evenness (Simpson's E)
@@ -182,7 +191,7 @@ midwestag.cropprop.df %>%
 ```
 
 ```{r}
-midwestag.cropprop.df %>%
+propag.plot <- midwestag.cropprop.df %>%
 ggplot() + 
   # geom_point(mapping = aes(x = year, 
   #                          y = n_crops,
@@ -190,14 +199,28 @@ ggplot() +
   # geom_smooth(mapping = aes(x = year, 
   #                          y = n_crops,
   #                          color = STATE)) + 
-  geom_point(mapping = aes(x = year, 
-                           y = prop_cropland,
-                           color = STATE)) + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = prop_cropland,
+  #                          color = STATE)) + 
   geom_smooth(mapping = aes(x = year, 
                            y = prop_cropland,
-                           color = STATE),
-              method = "lm") + 
-  theme_minimal_hgrid()
+                           color = factor(STATE)),
+              se = FALSE) + 
+  xlab(label = "Year") +
+  ylab(label = "Proportion agriculture") + 
+  scale_x_continuous(limits = c(1870, 2010),
+                     breaks = seq(1870, 2010, by = 20)) + 
+  theme_minimal() + 
+  scale_color_manual(values = c("#332217",
+                                "#89441C",
+                                "#C94900",
+                                "#D8753C",
+                                "#E5C3AE",
+                                "#F2DED2"))
+ggsave("./model_plots/propag_trend.eps",
+       plot = propag.plot,
+       height = 2,
+       width = 4.3)
 ```
 
 ## Combine data

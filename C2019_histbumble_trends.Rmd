@@ -278,7 +278,7 @@ rareest.8period.plot <- rareest.8period.df %>%
                   size = 0.8) +
   geom_smooth(mapping = aes(x = year,
                             y = qD),
-              method = "lm",
+              method = "glm",
               color = "black") + 
   ylab("Estimated species richness") + 
   xlab("Time Period") + 
@@ -708,6 +708,7 @@ bumbles.deltarelabun.df <- bumbles.deltarelabun.df %>%
   left_join(bumbles.species.subgenus.df,
             by = "species")
 midwestag.df <- read_csv("./midwestag.csv")
+midwestag.df
 ```
 
 ## Combine data

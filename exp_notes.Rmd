@@ -1,16 +1,16 @@
-# Historical Ag and Bumble Bee Community/Abundance Changes
-## Daily working notes and ideas
+---
+title: "Ch5 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Data cleaning and analysis notebook"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
 
-#### Summary Figures To Make: 
-
-#### Data Checking
-
-
-#### Data Cleanup
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
 
 
-
-#### Notes
+# Notes
 __January 7, 2019:__ Starting the initial data cleanup.  First step is to get all of the bumble bee ID's into the same format/tidy.  All 3 databases have entirely different data structure/organization.
 
 New data frame columns: 
@@ -70,13 +70,13 @@ __August 7, 2019:__ As of today, have rough trends in diversity and abundance do
 
 __August 9, 2019:__ Created plot that relates average change in agricultural area (ratio) against average change in relative abundnace between 8 time periods by species.  
 
-![](./bumble_byag_plot.png)
+![](./figures/bumble_byag_plot.png)
 
-![](./bumble_byagratio_plot.png)
+![](./figures/bumble_byagratio_plot.png)
 
 Created plot to show relative abundance per species by year as area: 
 
-![](./bumble_area_plot.png)
+![](./figures/bumble_area_plot.png)
 
 Want to explore abundance-based similiarity indices to see if communities (@ county level, state level) are becoming more homogeneous over time.  Another way to look at diversity trends over time other than rarefied species richness. Looks like the package `SpadeR` will work - uses Chao et al. publications in the function `SimilarityMult()` to calculate similarity index matrix for species x assemblage input matrix (in my case, assemblege = time bin).  
 
@@ -182,3 +182,6 @@ So cool!  Got the glm function working and it also spits out predicted plots for
 Affinis surprisingly is predicted to increase over time.  Need to run model with and without bbwatch data or find a better way to standardize for rare species. 
 
 Ran models limiting to single observer x species x location x time and the results are the same (same patterns, just different power in each glm).  
+
+__October 14, 2019:__ 
+Metric for GLM model fit: `1 - (Residual Deviance/Null Deviance)` essentially a version of r-squared.

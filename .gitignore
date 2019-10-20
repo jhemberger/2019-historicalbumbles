@@ -19,7 +19,5 @@ AgCensus_Master*
 *.csv
 analysis_bumbles.csv
 all_bumbles.csv
-./model_plots
 /model_plots
 r_data_archive
-gadm36_USA_2_sp.rds

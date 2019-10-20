@@ -1,6 +1,6 @@
 # Historical agriculture and bumble bee abundance/community shifts
 
-This study utilizes USDA/Census ag data in tandem with museum records of _Bombus_ spp. to understand long-term shifts in the relative abundance and diversity of bumble bees in relation to historical, areal agricultural activity.
+This study utilizes USDA/Census ag data in tandem with museum/indicidental records of _Bombus_ spp. to understand long-term shifts in the relative abundance and diversity of bumble bees in relation to historical changes in agricultural intensity.
 
 ## Study Motivation
 

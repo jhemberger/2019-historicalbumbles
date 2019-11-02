@@ -288,7 +288,15 @@ ggsave("./model_plots/diversity_trends.eps",
        rareest.8period.plot,
        width = 5,
        height = 3)
-rareest.8period.df
+test <- rareest.8period.df %>%
+       filter(order == 0) %>%
+       dplyr::select(qD)
+hist(test$qD)
+hist(test)
+summary(glm(qD ~ site,
+    data = rareest.8period.df %>%
+      filter(order == 0),
+    family = gaussian))
 ```
 
 #### Permutation test
@@ -532,23 +540,83 @@ bumbles.relabun.bystate.df %>%
 bumbles.relabun.df <- bumbles.df %>%
   distinct(collector_spp_date,
            .keep_all = TRUE) %>%
-  dplyr::select(state, species, subgenus, bin_5,) %>%
-  group_by(species, subgenus, bin_5) %>%
+  dplyr::select(state, species, subgenus, bin_8,) %>%
+  group_by(species, subgenus, bin_8) %>%
   summarise(n_bumbles = n()) %>%
   ungroup()
 bumbles.relabun.df
 total.abun.bybin.df <- bumbles.relabun.df %>%
-  group_by(bin_5) %>% 
+  group_by(bin_8) %>% 
   summarise(total_bumbles = sum(n_bumbles))
 total.abun.bybin.df
 bumbles.relabun.df <- bumbles.relabun.df %>%
   left_join(total.abun.bybin.df,
-            by = "bin_5") %>%
+            by = "bin_8") %>%
   mutate(relative_abun = n_bumbles / total_bumbles)
 bumbles.relabun.df <- bumbles.relabun.df %>%
   group_by(species) %>%
   mutate(time_period_num = row_number())
+
+# 8 period RA table for paper
+bumbles.relabun.df <- bumbles.relabun.df %>%
+  group_by(species) %>%
+  mutate(tp = row_number())
 bumbles.relabun.df
+
+
+species <- unique(bumbles.relabun.df$species)
+deltara.list <- list()
+for (i in species) {
+  data.df <- bumbles.relabun.df %>%
+    filter(species == i)
+  # hist(data.df$relative_abun)
+  lm <- glm(relative_abun ~ time_period_num,
+           data = data.df,
+           weights = total_bumbles,
+           family = binomial(link = "logit"))
+  # plot(lm)
+  lm.df <- tidy(lm) %>%
+    mutate(species = i) %>%
+    select(species, term, estimate, std.error, p.value) %>%
+    filter(term == "time_period_num")
+  deltara.list[[i]] <- lm.df
+}
+deltara.df <- bind_rows(deltara.list)
+deltara.df %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species,
+                            levels = species)) %>%
+  filter(!species %in% c("Bombus fraternus",
+                         "Bombus variabilis",
+                         "Bombus ashtoni")) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = estimate - std.error,
+                                ymax = estimate + std.error),
+                  color = "black") + 
+  coord_flip() + 
+  theme_minimal()
+
+deltara.df
+paper.deltara.df <- bumbles.relabun.df %>%
+  select(species, bin_8, relative_abun) %>%
+  spread(key = bin_8, value = relative_abun) %>%
+  mutate_at(vars(-species), .funs = round, digits = 4) %>%
+  left_join(bumbles.df %>%
+           group_by(species) %>%
+           summarise(n_records = n()),
+           by = "species") %>%
+  left_join(deltara.df %>%
+              select(species, estimate, p.value),
+            by = "species") %>%
+  arrange %>%
+  write_csv("./deltara.csv")
+paper.deltara.df
 ```
 
 ## Create area plot to show temporal trends

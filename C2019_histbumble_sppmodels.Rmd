@@ -40,7 +40,7 @@ library(jtools)
 library(effects)
 ```
 
-# Import data
+# IMPORT DATA
 ```{r}
 spatial.bumbles.df <- read_csv("./spatial_bumbles.csv") %>%
   dplyr::select(date, year, species, subgenus, dec_lat, dec_long, state, county, region, decade, t_period, time_period, 
@@ -61,7 +61,7 @@ midwestag.othervars.df <- read_csv("./agvars_other.csv",
                                                     col_double()))
 ```
 
-# Match bumble records to ag census period
+# MATCH AG/BUMBLE RECORDS
 ## Append additional ag variables
 ```{r}
 midwestag.othervars.df <- midwestag.othervars.df %>%
@@ -107,7 +107,8 @@ spatial.bumbles.df <- spatial.bumbles.df %>%
                                               "Bombus pensylvanicus"),
                                "rare",
                                "uncommon")))
-spatial.bumbles.df
+spatial.bumbles.df %>%
+  
 ```
 
 ## Summarize data by `ag_bin` 
@@ -139,8 +140,8 @@ spatial.bumbles.glmvars.df <- spatial.bumbles.ra.df %>%
 spatial.bumbles.glmvars.df
 ```
 
-## Summarize data by `bin_5`
-## OPTION: Limit data to unique collector x time x location x species obsv
+## Summarize data by `bin_ag`
+### OPTION: Limit data to unique collector x time x location x species obsv
 ```{r}
 spatial.bumbles.red.df <- spatial.bumbles.df %>%
   distinct(collector_spp_date,
@@ -168,7 +169,20 @@ spatial.bumbles.glmvars.red.df <- spatial.bumbles.ra.red.df %>%
 spatial.bumbles.glmvars.red.df
 ```
 
-# Fit GLMs to relative abundance
+### OPTION: remove 2012 of `bin_ag` to see if patterns of decline change
+```{r}
+spatial.bumbles.glmvars.no12.df <- spatial.bumbles.ra.df %>%
+  ungroup() %>%
+  filter(bin_ag < 2012) %>%
+  left_join(midwestag.model.df,
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county")) %>%
+  filter(bin_ag_abundance > 5) # tuner for minimum number of records per county
+spatial.bumbles.glmvars.no12.df
+```
+
+# MODEL PROP. ABUNDANCE
 ## GLM function
 ```{r}
 species.glms <- function(data) {
@@ -299,7 +313,7 @@ species.glms <- function(data) {
                               i,
                               ".eps",
                               sep = ""),
-             height = 4,
+             height = 3,
              width = 5)
     
     ncrop.plot <- ggplot() + 
@@ -336,7 +350,7 @@ species.glms <- function(data) {
                               i,
                               ".eps",
                               sep = ""),
-             height = 4,
+             height = 3,
              width = 5)
     print(trend.plot)
     print(propag.plot)
@@ -362,6 +376,7 @@ species.glms <- function(data) {
 ```{r}
 species.glms(data = spatial.bumbles.glmvars.df)
 species.glms(data = spatial.bumbles.glmvars.red.df) # reduced dataset
+species.glms(data = spatial.bumbles.glmvars.no12.df) # reduced dataset 2
 
 glms.df <- bind_rows(glm.df.list,
                      .id = "species")
@@ -380,13 +395,59 @@ glms.df
 
 ## Plot GLM coefficients
 ### Use `ggplot`
-#### prop_agriculture
+#### Combine data (using scaled coefs)
 ```{r}
-glm.df <- bind_rows(glm.df.list,
-                    .id = "species")
-glm.df
-coef.propag.plot <- glm.df %>%
-  filter(n_records > 60) %>%
+test <- summ(glm.output.list[[1]], scale = TRUE, confint = TRUE)
+scale_coefs <- function(model.list) {
+  df.list <- list()
+  iter <- 0
+  for (i in model.list) {
+    iter <- iter + 1
+    summ.glm <- summ(i,
+                     scale = TRUE,
+                     confint = TRUE)
+    glm.df <- as.data.frame(summ.glm[["coeftable"]]) %>%
+      mutate(term = c("(Intercept)",
+                      "n_crops",
+                      "prop_cropland",
+                      "bin_ag")) %>%
+      dplyr::select("term" = "term",
+                    "estimate" = "Est.",
+                    "lower.ci" = "2.5%",
+                    "upper.ci" = "97.5%",
+                    "z.stat" = "z val.",
+                    "p.value" = "p") %>%
+      mutate(species = names(model.list[iter]),
+             sample.size = length(summ.glm$model$y)) %>%
+      select(species, sample.size, everything())
+    print(glm.df)
+    df.list[[iter]] <- glm.df
+  }
+  glms.df <- bind_rows(df.list)
+  assign("glms.df",
+         glms.df,
+         envir = .GlobalEnv)
+}
+
+scale_coefs(glm.output.list)
+glms.df %>%
+  mutate(p.value = ifelse(p.value < 0.001,
+                          "< 0.001",
+                          round(p.value,
+                                digits = 3)),
+         estimate = round(estimate,
+                          digits = 3),
+         lower.ci = round(lower.ci,
+                           digits = 4),
+         upper.ci = round(lower.ci,
+                           digits = 4)) %>%
+    write_csv("./model_output/sppglm.csv")
+```
+
+##### prop_agriculture
+```{r}
+coef.propag.plot <- glms.df %>%
+  filter(sample.size > 60) %>%
   filter(term == "prop_cropland") %>%
   arrange(desc(estimate)) %>%
   mutate(row_order = factor(species,
@@ -398,8 +459,8 @@ coef.propag.plot <- glm.df %>%
              size = 0.6) + 
   geom_pointrange(mapping = aes(x = row_order,
                                 y = estimate,
-                                ymin = estimate - std.error,
-                                ymax = estimate + std.error),
+                                ymin = lower.ci,
+                                ymax = upper.ci),
                   color = "black",
                   size = 0.6) + 
   geom_point(mapping = aes(x = row_order, 
@@ -408,15 +469,10 @@ coef.propag.plot <- glm.df %>%
              size = 5,
              stroke = 1,
              fill = "black") + 
-  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
-  #           mapping = aes(x = term,
-  #                         y = estimate),
-  #           label = "*",
-  #           position = position_dodge(width = 0.9)) +
-  scale_y_continuous(limits = c(-10, 2.5),
-                     breaks = seq(-10,
-                                  2.5,
-                                  by = 2)) +
+  scale_y_continuous(limits = c(-2.5, 1),
+                     breaks = seq(-2.5,
+                                  1,
+                                  by = 0.5)) +
   theme_minimal() +
   coord_flip()
 coef.propag.plot
@@ -426,13 +482,10 @@ ggsave("./model_plots/coefs/prop_cropland.eps",
        height = 6)
 ```
 
-#### n_crops
+##### n_crops
 ```{r}
-glm.df <- bind_rows(glm.df.list,
-                    .id = "species")
-glm.df
-coef.ncrop.plot <- glm.df %>%
-  filter(n_records > 60) %>%
+coef.ncrop.plot <- glms.df %>%
+  filter(sample.size > 60) %>%
   filter(term == "n_crops") %>%
   arrange(desc(estimate)) %>%
   mutate(row_order = factor(species,
@@ -444,8 +497,8 @@ coef.ncrop.plot <- glm.df %>%
              size = 0.6) + 
   geom_pointrange(mapping = aes(x = row_order,
                                 y = estimate,
-                                ymin = estimate - std.error,
-                                ymax = estimate + std.error),
+                                ymin = lower.ci,
+                                ymax = upper.ci),
                   color = "black",
                   size = 0.6) + 
   geom_point(mapping = aes(x = row_order, 
@@ -454,16 +507,10 @@ coef.ncrop.plot <- glm.df %>%
              size = 5,
              stroke = 1,
              fill = "black") + 
-  scale_y_continuous(limits = c(-0.3, 0.4),
-                     breaks = round(seq(-0.3,
-                                  0.3,
-                                  by = 0.1),
-                                  digits = 1)) +
-  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
-  #           mapping = aes(x = term,
-  #                         y = estimate),
-  #           label = "*",
-  #           position = position_dodge(width = 0.9)) +
+  scale_y_continuous(limits = c(-2.5, 1),
+                     breaks = seq(-2.5,
+                                  1,
+                                  by = 0.5)) +
   theme_minimal() +
   coord_flip()
 coef.ncrop.plot
@@ -474,13 +521,10 @@ ggsave("./model_plots/coefs/n_crops.eps",
 
 ```
 
-#### year
+##### year
 ```{r}
-glm.df <- bind_rows(glm.df.list,
-                    .id = "species")
-glm.df
-coef.year.plot <- glm.df %>%
-  filter(n_records > 60) %>%
+coef.year.plot <- glms.df %>%
+  filter(sample.size > 60) %>%
   filter(term == "bin_ag") %>%
   arrange(desc(estimate)) %>%
   mutate(row_order = factor(species,
@@ -492,8 +536,8 @@ coef.year.plot <- glm.df %>%
              size = 0.6) + 
   geom_pointrange(mapping = aes(x = row_order,
                                 y = estimate,
-                                ymin = estimate - std.error,
-                                ymax = estimate + std.error),
+                                ymin = lower.ci,
+                                ymax = upper.ci),
                   color = "black",
                   size = 0.6) + 
   geom_point(mapping = aes(x = row_order, 
@@ -502,16 +546,10 @@ coef.year.plot <- glm.df %>%
              size = 5,
              stroke = 1,
              fill = "black") + 
-  scale_y_continuous(limits = c(-0.03, 0.03),
-                     breaks = round(seq(-0.03,
-                                        0.03,
-                                        by = 0.01),
-                                    digits = 2)) +
-  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
-  #           mapping = aes(x = term,
-  #                         y = estimate),
-  #           label = "*",
-  #           position = position_dodge(width = 0.9)) +
+  scale_y_continuous(limits = c(-2.5, 1),
+                     breaks = seq(-2.5,
+                                  1,
+                                  by = 0.5)) +
   theme_minimal() +
   coord_flip()
 coef.year.plot
@@ -636,7 +674,7 @@ ncrop.coef.plot
 propcrop.coef.plot
 ```
 
-# Fit GLMs to species richness
+# MODEL SPECIES RICHNESS
 ## Prep data
 ```{r}
 spatial.bumbles.diverity.df <- spatial.bumbles.df %>%
@@ -823,8 +861,7 @@ diversity.glms(spatial.bumbles.diverity.df)
 ```
 
 
-
-# Create predicted rel_abun map
+# PREDICT REL_ABUN
 ```{r}
 pred.relabun <- function(model.list) {
   pred.list <- list()
@@ -859,11 +896,24 @@ pred.relabun(glm.output.list)
 ## Plot predicted relative abundance over time
 ```{r}
 plot.predicted <- function() {
-  plot.species <- unique(relabun_bycty.df$species)
+  plot.species <- c("Bombus affinis",
+                        "Bombus auricomus",
+                        "Bombus bimaculatus",
+                        "Bombus borealis",
+                        "Bombus citrinus",
+                        "Bombus fervidus",
+                        "Bombus griseocollis",
+                        "Bombus impatiens",
+                        "Bombus pensylvanicus",
+                        "Bombus rufocinctus",
+                        "Bombus ternarius",
+                        "Bombus terricola",
+                        "Bombus vagans")
   for(i in plot.species) {
     plot <- relabun_bycty.df %>%
       filter(year %in% c(1870, 1900, 1930, 1959, 1974, 2012)) %>%
       filter(species == i) %>%
+      mutate(bin_ag = year) %>%
       mutate(state_full = abbr2state(state)) %>%
       full_join(ungroup(us.county.midwest),
                 by = c("county" = "CNTY_NAME",
@@ -882,11 +932,25 @@ plot.predicted <- function() {
                    color = "black",
                    fill = NA,
                    size = 0.25) + 
+      geom_point(inherit.aes = FALSE,
+                 data = spatial.bumbles.df %>%
+                   filter(species == i) %>%
+                   filter(bin_ag %in% c(1870, 1900, 1930, 1959, 1974, 2012)) %>%
+                   group_by(bin_ag) %>%
+                   sample_n(size = 50, replace = TRUE),
+                 mapping = aes(x = dec_long,
+                               y = dec_lat),
+                 shape = 21,
+                 fill = "tomato",
+                 # color = "black",
+                 size = 1) +
       coord_map("stereographic") +
       labs(title = i) +
-      scale_fill_viridis_d(option = "inferno",
-                           direction = 1) + 
-      facet_grid(~ year) + 
+      scale_fill_viridis_c(option = "inferno",
+                           direction = 1) +
+      # scale_fill_gradient(low = "#FFFFFF",
+      #                     high = "#59262F") +
+      facet_grid(~ bin_ag) + 
       theme_void()
     ggsave(paste("./model_plots/predict_relabun/",
                  tolower(gsub(" ", "_", i)),
@@ -902,5 +966,724 @@ plot.predicted <- function() {
 ## Plot predicted
 ```{r}
 plot.predicted()
+```
+
+# MODEL OTHER VAR (PEST/PASTRE)
+## GLM function
+```{r}
+species.2.glms <- function(data) {
+  species.list <- as.list(unique(data$species))
+  glm.list <- list()
+  df.list <- list()
+  trend.plots.list <- list()
+  pastureac.plots.list <- list()
+  pestac.plots.list <- list()
+  avgfarm.plots.list <- list()
+  for (i in species.list) {
+    model.df <- data %>%
+      filter(species == i) %>%
+      filter(!is.na(species))
+    # print(model.df)
+    glm.model <- glm(rel_abun ~ 
+                       pastureac + 
+                       pestac + 
+                       # avgfarm +
+                       bin_ag,
+                     data = model.df,
+                     weights = model.df$bin_ag_abundance,
+                     na.action = na.exclude,
+                     family = binomial(link = "logit"))
+    glm.df <- tidy(glm.model) %>%
+      mutate(n_records = nrow(glm.model$model)) %>%
+      dplyr::select(term, 
+                    n_records, 
+                    everything())
+    # glmqq.plot <- qqPlot(residuals(glm.model))
+    # resid.plot <- plot(glm.model)
+    glm.list[[i]] <- glm.model
+    df.list[[i]] <- glm.df
+    
+    predict <- predictorEffects(glm.model,
+                                axes = list(x = list(rug = TRUE)),
+                                se = list(compute = TRUE))
+    predict.df <- bind_rows(as.tibble(predict$pastureac) %>%
+                              rename(new_x = pastureac) %>%
+                              mutate(var = "pastureac"),
+                            as.tibble(predict$pestac) %>%
+                              rename(new_x = pestac) %>%
+                              mutate(var = "pestac"),
+                            # as.tibble(predict$avgfarm) %>%
+                            #   rename(new_x = avgfarm) %>%
+                            #   mutate(var = "avgfarm"),
+                            as.tibble(predict$bin_ag) %>%
+                              rename(new_x = bin_ag) %>%
+                              mutate(var = "bin_ag"))
+    trend.plot <- ggplot() + 
+      geom_point(data = model.df ,
+                 mapping = aes(x = bin_ag,
+                               y = rel_abun),
+                 shape = 21,
+                 fill = "black",
+                 color = "black",
+                 alpha = 1,
+                 position = position_jitter(width = 1.5)) + 
+      geom_ribbon(data = predict.df %>%
+                    filter(var == "bin_ag"),
+                  mapping = aes(x = new_x,
+                                ymin = lower,
+                                ymax = upper),
+                  fill = "#F22B29",
+                  color = "black",
+                  alpha = 1) +
+      geom_line(data = predict.df %>%
+                  filter(var == "bin_ag"),
+                mapping = aes(x = new_x,
+                              y = fit),
+                size = 1.25,
+                color = "#F22B29") + 
+      geom_rug(data = spatial.bumbles.df %>%
+                 filter(species == i) %>%
+                 mutate(rel_abun = 0),
+               mapping = aes(x = year,
+                             y = rel_abun),
+               sides = "b",
+               position = "jitter") + 
+      theme_histbumbles() + 
+      scale_x_continuous(limits = c(1970, 2020),
+                         breaks = seq(1970, 2020, by = 10)) +
+      scale_y_continuous(limits = c(0, 1),
+                         breaks = c(0, 0.5, 1)) +
+      ylab(label = "Proportional Abundance") + 
+      xlab(label = "Year") + 
+      labs(title = paste(i,
+                         "proportional abundance 1870-present",
+                         sep = " "))
+    # ggsave(plot = trend.plot,
+    #        filename = paste("./model_plots/trends/",
+    #                         i,
+    #                         ".eps",
+    #                         sep = ""),
+    #        height = 3,
+    #        width = 5)
+    
+    pastureac.plot <- ggplot() + 
+      geom_point(data = model.df ,
+                 mapping = aes(x = pastureac,
+                               y = rel_abun),
+                 shape = 21,
+                 fill = "black",
+                 color = "black",
+                 alpha = 1,
+                 position = position_jitter()) + 
+      geom_ribbon(data = predict.df %>%
+                    filter(var == "pastureac"),
+                  mapping = aes(x = new_x,
+                                ymin = lower,
+                                ymax = upper),
+                  fill = "#140F2D",
+                  color = "black",
+                  alpha = 1) +
+      geom_line(data = predict.df %>%
+                  filter(var == "pastureac"),
+                mapping = aes(x = new_x,
+                              y = fit),
+                size = 1.25,
+                color = "#140F2D") + 
+      theme_histbumbles() + 
+      # scale_x_continuous(limits = c(1870, 2020),
+      #                    breaks = seq(1870, 2020, by = 20)) +
+      ylab(label = "Proportional Abundance") + 
+      xlab(label = "Pasture Acreage") + 
+      labs(title = i)
+    # ggsave(plot = ncrop.plot,
+    #        filename = paste("./model_plots/ncrops/",
+    #                         i,
+    #                         ".eps",
+    #                         sep = ""),
+    #        height = 4,
+    #        width = 5)
+    #        
+    # avgfarm.plot <- ggplot() + 
+    #   geom_point(data = model.df ,
+    #              mapping = aes(x = avgfarm,
+    #                            y = rel_abun),
+    #              shape = 21,
+    #              fill = "black",
+    #              color = "black",
+    #              alpha = 1,
+    #              position = position_jitter()) + 
+    #   geom_ribbon(data = predict.df %>%
+    #                 filter(var == "avgfarm"),
+    #               mapping = aes(x = new_x,
+    #                             ymin = lower,
+    #                             ymax = upper),
+    #               fill = "#140F2D",
+    #               color = "black",
+    #               alpha = 1) +
+    #   geom_line(data = predict.df %>%
+    #               filter(var == "avgfarm"),
+    #             mapping = aes(x = new_x,
+    #                           y = fit),
+    #             size = 1.25,
+    #             color = "#140F2D") + 
+    #   theme_histbumbles() + 
+    #   # scale_x_continuous(limits = c(1870, 2020),
+    #   #                    breaks = seq(1870, 2020, by = 20)) +
+    #   ylab(label = "Proportional Abundance") + 
+    #   xlab(label = "Average Size of Farm (acres)") + 
+    #   labs(title = i)
+    # ggsave(plot = ncrop.plot,
+    #        filename = paste("./model_plots/ncrops/",
+    #                         i,
+    #                         ".eps",
+    #                         sep = ""),
+    #        height = 4,
+    #        width = 5)
+    pestac.plot <- ggplot() + 
+      geom_point(data = model.df ,
+                 mapping = aes(x = pestac,
+                               y = rel_abun),
+                 shape = 21,
+                 fill = "black",
+                 color = "black",
+                 alpha = 1,
+                 position = position_jitter()) + 
+      geom_ribbon(data = predict.df %>%
+                    filter(var == "pestac"),
+                  mapping = aes(x = new_x,
+                                ymin = lower,
+                                ymax = upper),
+                  fill = "#140F2D",
+                  color = "black",
+                  alpha = 1) +
+      geom_line(data = predict.df %>%
+                  filter(var == "pestac"),
+                mapping = aes(x = new_x,
+                              y = fit),
+                size = 1.25,
+                color = "#140F2D") + 
+      theme_histbumbles() + 
+      # scale_x_continuous(limits = c(1870, 2020),
+      #                    breaks = seq(1870, 2020, by = 20)) +
+      ylab(label = "Proportional Abundance") + 
+      xlab(label = "Pesticide Treated Acreage") + 
+      labs(title = i)
+    # ggsave(plot = ncrop.plot,
+    #        filename = paste("./model_plots/ncrops/",
+    #                         i,
+    #                         ".eps",
+    #                         sep = ""),
+    #        height = 4,
+    #        width = 5)
+    print(trend.plot)
+    print(pastureac.plot)
+    # print(avgfarm.plot)
+    print(pestac.plot)
+    trend.plots.list[[i]] <- trend.plot
+    pastureac.plots.list[[i]] <- pastureac.plot
+    pestac.plots.list[[i]] <- pestac.plot
+    # avgfarm.plots.list[[i]] <- avgfarm.plot
+  }
+  assign("glm.output2.list",
+         glm.list,
+         envir = .GlobalEnv)
+  assign("glm.df2.list",
+         df.list,
+         envir = .GlobalEnv)
+  # assign("glm.trendplots2.list",
+  #        trend.plots.list,
+  #        envir = .GlobalEnv)
+}
+```
+
+## Run GLM2 function
+```{r}
+spatial.bumbles.glmvars2.df <- spatial.bumbles.glmvars.df %>%
+  dplyr::select(-c(n_crops, crop_evenness, prop_cropland, fertexp, covercropac)) %>%
+  drop_na(cloverac, pastureac, pestac, fertac) %>%
+  filter(!species %in% c("Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  filter(bin_ag_abundance > 5)
+spatial.bumbles.glmvars2.df %>%
+  group_by(species) %>%
+  summarise(n = n())
+
+species.2.glms(spatial.bumbles.glmvars2.df)
+```
+
+### Combine dataframe
+```{r}
+glms2.df <- bind_rows(glm.df2.list,
+                      .id = "species")
+glms2.df <- glms2.df %>%
+  mutate(p.value = ifelse(p.value < 0.001,
+                          "< 0.001",
+                          round(p.value,
+                                digits = 3)),
+         estimate = round(estimate,
+                          digits = 6),
+         std.error = round(std.error,
+                           digits = 5)) #%>%
+  #write_csv("./model_output/sppglm2.csv")
+glms2.df
+```
+
+## Plot GLM coefficients
+### Use `ggplot`
+#### Combine data (using scaled coefs)
+```{r}
+scale_coefs2 <- function(model.list) {
+  df.list <- list()
+  iter <- 0
+  for (i in model.list) {
+    iter <- iter + 1
+    summ.glm <- summ(i,
+                     scale = TRUE,
+                     confint = TRUE)
+    glm.df <- as.data.frame(summ.glm[["coeftable"]]) %>%
+      mutate(term = c("(Intercept)",
+                      "pastureac",
+                      "pestac",
+                      "bin_ag")) %>%
+      dplyr::select("term" = "term",
+                    "estimate" = "Est.",
+                    "lower.ci" = "2.5%",
+                    "upper.ci" = "97.5%",
+                    "z.stat" = "z val.",
+                    "p.value" = "p") %>%
+      mutate(species = names(model.list[iter]),
+             sample.size = length(summ.glm$model$y)) %>%
+      select(species, sample.size, everything())
+    print(glm.df)
+    df.list[[iter]] <- glm.df
+  }
+  glms.df <- bind_rows(df.list)
+  assign("glms2.df",
+         glms.df,
+         envir = .GlobalEnv)
+}
+
+scale_coefs2(glm.output2.list)
+
+glms2.df %>%
+  mutate(p.value = ifelse(p.value < 0.001,
+                          "< 0.001",
+                          round(p.value,
+                                digits = 3)),
+         estimate = round(estimate,
+                          digits = 3),
+         lower.ci = round(lower.ci,
+                           digits = 4),
+         upper.ci = round(lower.ci,
+                           digits = 4)) %>%
+    write_csv("./model_output/sppglm2.csv")
+
+```
+#### pastureac
+```{r}
+coef.pastac.plot <- glms2.df %>%
+  # filter(n_records > 60) %>%
+  filter(term == "pastureac") %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species,
+                            levels = species)) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = lower.ci,
+                                ymax = upper.ci),
+                  color = "black",
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = row_order, 
+                           y = estimate),
+             shape = 21,
+             size = 5,
+             stroke = 1,
+             fill = "black") + 
+  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
+  #           mapping = aes(x = term,
+  #                         y = estimate),
+  #           label = "*",
+  #           position = position_dodge(width = 0.9)) +
+  # scale_y_continuous(limits = c(-10, 2.5),
+  #                    breaks = seq(-10,
+  #                                 2.5,
+  #                                 by = 2)) +
+  theme_minimal() +
+  coord_flip()
+coef.pastac.plot
+ggsave("./model_plots/coefs/pastac.eps",
+       coef.pastac.plot,
+       width = 5,
+       height = 6)
+```
+
+#### pestac
+```{r}
+coef.pestac.plot <- glms2.df %>%
+  # filter(n_records > 60) %>%
+  filter(term == "pestac") %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species,
+                            levels = species)) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = lower.ci,
+                                ymax = upper.ci),
+                  color = "black",
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = row_order, 
+                           y = estimate),
+             shape = 21,
+             size = 5,
+             stroke = 1,
+             fill = "black") + 
+  # scale_y_continuous(limits = c(-0.3, 0.4),
+  #                    breaks = round(seq(-0.3,
+  #                                 0.3,
+  #                                 by = 0.1),
+  #                                 digits = 1)) +
+  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
+  #           mapping = aes(x = term,
+  #                         y = estimate),
+  #           label = "*",
+  #           position = position_dodge(width = 0.9)) +
+  theme_minimal() +
+  coord_flip()
+coef.pestac.plot
+ggsave("./model_plots/coefs/pestac.eps",
+       coef.pestac.plot,
+       width = 5,
+       height = 6)
+
+```
+
+#### year
+```{r}
+coef.year.plot <- glms2.df %>%
+  # filter(n_records > 60) %>%
+  filter(term == "bin_ag") %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species,
+                            levels = species)) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = lower.ci,
+                                ymax = upper.ci),
+                  color = "black",
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = row_order, 
+                           y = estimate),
+             shape = 21,
+             size = 5,
+             stroke = 1,
+             fill = "black") + 
+  # scale_y_continuous(limits = c(-0.03, 0.03),
+  #                    breaks = round(seq(-0.03,
+  #                                       0.03,
+  #                                       by = 0.01),
+  #                                   digits = 2)) +
+  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
+  #           mapping = aes(x = term,
+  #                         y = estimate),
+  #           label = "*",
+  #           position = position_dodge(width = 0.9)) +
+  theme_minimal() +
+  coord_flip()
+coef.year.plot
+ggsave("./model_plots/coefs/year_2.eps",
+       coef.year.plot,
+       width = 5,
+       height = 6)
+```
+
+
+# RANGE/COUNTY SHIFTS
+## Prep data
+```{r}
+spatial.bumbles.range.df <- spatial.bumbles.df %>%
+  ungroup() %>%
+  select(species, subgenus, state, county, bin_8) %>%
+  group_by(species, state) %>%
+  distinct(county, .keep_all = TRUE) %>%
+  group_by(species, bin_8) %>%
+  summarise(n_counties = n()) %>%
+  filter(species %in% c("Bombus affinis",
+                        "Bombus auricomus",
+                        "Bombus bimaculatus",
+                        "Bombus borealis",
+                        "Bombus citrinus",
+                        "Bombus fervidus",
+                        "Bombus griseocollis",
+                        "Bombus impatiens",
+                        "Bombus pensylvanicus",
+                        "Bombus rufocinctus",
+                        "Bombus ternarius",
+                        "Bombus terricola",
+                        "Bombus vagans")) %>%
+  group_by(species) %>%
+  mutate(time_point = row_number())
+
+spatial.bumbles.range.df
+
+
+# alternate way not filtering by min records per county (just present or)
+
+
+
+
+spatial.bumbles.range.df %>%
+  group_by(species) %>%
+  mutate(time_point = row_number()) %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = bin_8,
+                           y = n_counties),
+             shape = 21,
+             size = 3,
+             fill = "black") +
+  geom_smooth(mapping = aes(x = time_point,
+                            y = n_counties),
+              method = "glm",
+              #span = 1,
+              se = TRUE,
+              alpha = 1) + 
+  # scale_x_continuous(limits = c(1840, 2020),
+  #                    breaks = seq(1840, 2020, by = 30)) +
+  # scale_y_continuous(limits = c(0, 250)) +
+  facet_wrap(~ species) +
+  theme_histbumbles()
+  
+# ggsave(paste("./model_plots/county_trends/", i, ".eps", sep = ""),
+  #        plot,
+  #        height = 3,
+  #        width = 5)
+
+```
+## LM function
+```{r}
+range.lms <- function(data) {
+  species <- unique(data$species)
+  df.list <- list()
+  for (i in species) {
+    model.df <- data %>%
+      filter(species == i)
+    lm <- lm(n_counties ~ time_point,
+               data = model.df)
+    tidy.df <- tidy(lm) %>%
+      mutate(species = i) %>%
+      select(species, everything())
+    print(tidy.df)
+    print(plot(lm))
+    df.list[[i]] <- tidy.df
+  }
+  dfs <- bind_rows(df.list)
+  assign("range.lms.df",
+         dfs,
+         envir = .GlobalEnv)
+}
+
+range.lms(spatial.bumbles.range.df)
+```
+
+## GLM function
+```{r}
+range.glms <- function(data) {
+  species <- unique(data$species)
+  df.list <- list()
+  glm.list <- list()
+  for (i in species) {
+    model.df <- data %>%
+      filter(species == i)
+    glm <- glm(n_counties ~ time_point,
+               data = model.df,
+               family = "poisson")
+    # plot(glm)
+    tidy.df <- tidy(glm) %>%
+      mutate(species = i) %>%
+      dplyr::select(species, everything())
+    print(tidy.df)
+    # print(acf(residuals(glm)))
+    df.list[[i]] <- tidy.df
+    glm.list[[i]] <- glm
+  }
+  dfs <- bind_rows(df.list)
+  assign("range.glms.df",
+         dfs,
+         envir = .GlobalEnv)
+  assign("range.glm.list",
+         glm.list,
+         envir = .GlobalEnv)
+}
+
+range.glms(spatial.bumbles.range.df)
+```
+
+
+## `nlme` function
+```{r}
+range.lms <- function(data) {
+  library(nlme)
+  species <- unique(data$species)
+  df.list <- list()
+  for (i in species) {
+    model.df <- data %>%
+      filter(species == i)
+    gls <- gls(n_counties ~ bin_ag,
+               data = model.df,
+               correlation = corAR1(form = ~ bin_ag),
+               weights = (model.df$sum_bees_allspp / 1000),
+               na.action = na.exclude)
+    gls
+    tidy.df <- tidy(gls) %>%
+      mutate(species = i) %>%
+      select(species, everything())
+    print(tidy.df)
+    print(summary(gls))
+    df.list[[i]] <- tidy.df
+  }
+  dfs <- bind_rows(df.list)
+  assign("range.glms.df",
+         dfs,
+         envir = .GlobalEnv)
+}
+
+range.lms(spatial.bumbles.range.df)
+```
+
+## Plot LM coefficients
+### Prep data
+```{r}
+scale_coefs3 <- function(model.list) {
+  df.list <- list()
+  iter <- 0
+  for (i in model.list) {
+    iter <- iter + 1
+    summ.glm <- summ(i,
+                     scale = TRUE,
+                     confint = TRUE)
+    glm.df <- as.data.frame(summ.glm[["coeftable"]]) %>%
+      mutate(term = c("(Intercept)",
+                      "time_point")) %>%
+      dplyr::select("term" = "term",
+                    "estimate" = "Est.",
+                    "lower.ci" = "2.5%",
+                    "upper.ci" = "97.5%",
+                    "statistic" = "z val.",
+                    "p.value" = "p") %>%
+      mutate(species = names(model.list[iter]),
+             sample.size = length(summ.glm$model$y)) %>%
+      dplyr::select(species, sample.size, everything())
+    print(glm.df)
+    df.list[[iter]] <- glm.df
+  }
+  glms.df <- bind_rows(df.list)
+  assign("glms3.df",
+         glms.df,
+         envir = .GlobalEnv)
+}
+
+scale_coefs3(range.glm.list)
+```
+
+### Plot coefs
+```{r}
+range.glm.plot1 <- glms3.df %>%
+  filter(term == "time_point") %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species,
+                            levels = species)) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = lower.ci,
+                                ymax = upper.ci),
+                  color = "black",
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = row_order, 
+                           y = estimate),
+             shape = 21,
+             size = 5,
+             stroke = 1,
+             fill = "black") + 
+  # scale_y_continuous(limits = c(-0.015, 0.015),
+  #                    breaks = round(seq(-0.015,
+  #                                       0.015,
+  #                                       by = 0.01),
+  #                                   digits = 2)) +
+  # geom_text(data = glm.df[glm.df$p.value < 0.05, ],
+  #           mapping = aes(x = term,
+  #                         y = estimate),
+  #           label = "*",
+  #           position = position_dodge(width = 0.9)) +
+  theme_minimal() +
+  coord_flip() + 
+  ggsave("./model_plots/coefs/n_couniest.eps",
+       range.glm.plot1,
+       width = 5,
+       height = 6)
+range.glm.plot1
+
+```
+
+# PREDICT RANGE GLMs
+```{r}
+pred.counties <- function(model.list) {
+  pred.list <- list()
+  newdata.df <- tibble(bin_ag = unique(midwestag.model.df$year),
+                       bin_ag2 = bin_ag^2)
+  print(newdata.df)
+  for (i in 1:length(model.list)) {
+    predict <- predict.glm(object = model.list[[i]],
+                           newdata = newdata.df,
+                           type = "response",
+                           na.action = na.pass)
+    predict.df <- tibble(ncounties = predict,
+                         species = names(model.list[i]),
+                         year = sort(newdata.df$bin_ag))
+    # print(predict.df)
+    pred.list[[i]] <- predict.df
+  }
+  ncounties.df <- bind_rows(pred.list)
+  assign("ncounties.df",
+         ncounties.df,
+         envir = .GlobalEnv)
+}
+pred.counties(range.glm.list)
+ncounties.df
+```
+
+## Plot GLM results
+```{r}
+ggplot(data = spatial.bumbles.range.df) + 
+  geom_point(mapping = aes(x = bin_ag,
+                           y = n_counties,
+                           fill = species),
+             shape = 21,
+             color = "black") +
+  geom_line(data = ncounties.df,
+            mapping = aes(x = year,
+                          y = ncounties)) +
+  theme_minimal() + 
+  facet_wrap(~ species,
+             ncol = 4)
 ```
 

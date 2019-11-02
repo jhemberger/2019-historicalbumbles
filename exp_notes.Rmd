@@ -185,3 +185,20 @@ Ran models limiting to single observer x species x location x time and the resul
 
 __October 14, 2019:__ 
 Metric for GLM model fit: `1 - (Residual Deviance/Null Deviance)` essentially a version of r-squared.
+
+__October 21, 2019:__ Ran additional models yesterday to 1974sh dataset - current to parse out effect of more detailed drivers (pasture, farm size, pesticides, etc.).  Patterns more or less match what we see in the original models with prop_ag and n_crops (makes sense, the variables are correlated).  Worth including?  Probably at least anecdotally.  
+
+claudio suggests a second approach to understand declines and that is just number of counties occupied at any given time and how that has changed (proportional abundance doesn't capture that, only captures that, where it is present, how has abundance changed) - could be that affinis, for example, has remained steady in the counties that it still occupies, but is blinking off in many counties. 
+
+* did this - generally an increasing trend as surveys have become more common.  Terricola/pensy. sit near bottom of change, however, while more common spp. coef. estimates are much higher. 
+
+* will also try with average change in number of counties between time points 
+
+__October 26, 2019:__ 
+* should include interaction of crop diversity with prop ag in models - effect of one could depend on value of the other.
+
+__Nov 2, 2019:__ 
+Analyses for thesis are complete!  Next steps: 
+* small analysis of east coast with 2-4 important species for comparison.
+* clean up code into single modeling rmd. 
+* final figures/tables 

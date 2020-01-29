@@ -14,10 +14,12 @@ USCounties_Shapefile
 .DS*
 *.csv
 *.xlsx
-*.html
+*.nb.html
 AgCensus_Master*
 *.csv
 analysis_bumbles.csv
 all_bumbles.csv
 /model_plots
 r_data_archive
+/ms_figs/*.ai
+/meeting_notes

@@ -73,6 +73,510 @@ bumbles.df <- bumbles.df %>%
                                                               "Subterraneobombus")))))))
 ```
 
+## 20 bins
+```{r}
+bin30.bumbles.df <- rbin_quantiles(data = bumbles.df, 
+                                  response = species,
+                                  predictor = year,
+                                  bins = 20)
+bin20.bumbles.df
+bumbles.df <- bumbles.df %>%
+  mutate(bin_20 = case_when(
+    year < 1911 ~ "1824-1911",
+    between(year, 1911, 1920) ~ "1911-1920",
+    between(year, 1920, 1926) ~ "1921-1926",
+    between(year, 1926, 1936) ~ "1927-1936",
+    between(year, 1936, 1947) ~ "1937-1947",
+    between(year, 1947, 1958) ~ "1948-1958",
+    between(year, 1958, 1960) ~ "1959-1960",
+    between(year, 1960, 1964) ~ "1961-1964",
+    between(year, 1964, 1966) ~ "1965-1966",
+    between(year, 1966, 1969) ~ "1967-1969",
+    between(year, 1969, 1971) ~ "1970-1971",
+    between(year, 1971, 1972) ~ "1972-1973",
+    between(year, 1972, 1978) ~ "1973-1978",
+    between(year, 1978, 1983) ~ "1979-1983",
+    between(year, 1983, 1994) ~ "1984-1994",
+    between(year, 1994, 2007) ~ "1995-2007",
+    between(year, 2007, 2008) ~ "2008-2009",
+    between(year, 2008, 2015) ~ "2009-2015",
+    between(year, 2015, 2017) ~ "2016-2017",
+    year >= 2017 ~ "2017-present",
+  ))
+bumbles.df$bin_8 <- factor(bumbles.df$bin_8,
+                           levels = c("1824-1911",
+                                      "1911-1920",
+                                      "1921-1926",
+                                      "1927-1936",
+                                      "1937-1947",
+                                      "1948-1958",
+                                      "1959-1960",
+                                      "1961-1964",
+                                      "1965-1966",
+                                      "1967-1969",
+                                      "1970-1971",
+                                      "1972-1973",
+                                      "1973-1978",
+                                      "1979-1983",
+                                      "1984-1994",
+                                      "1995-2007",
+                                      "2008-2009",
+                                      "2009-2015",
+                                      "2016-2017",
+                                      "2017-present"))
+table(bumbles.df$bin_20)
+
+rare.bumbles.20bin.df <- bumbles.df %>%
+  distinct(collector_spp_date,
+           .keep_all = TRUE) %>%
+  dplyr::select(species, bin_20) %>%
+  group_by(bin_20) %>%
+  count(species)
+rare.bumbles.20period.df <- data.frame(time_bin = rare.bumbles.20bin.df$bin_20,
+                                      abun = rare.bumbles.20bin.df$n)
+rare.bumbles.20period <- list("1" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1824-1911"]),
+                              "2" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1911-1920"]),
+                              "3" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1921-1926"]),
+                              "4" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1927-1936"]),
+                              "5" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1937-1947"]),
+                              "6" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1948-1958"]),
+                              "7" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1959-1960"]),
+                              "8" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1961-1964"]), 
+                              "9" = 
+sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1965-1966"]),
+                              "10" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1967-1969"]),
+                              "11" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1970-1971"]),
+                              "12" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1972-1973"]),
+                              "13" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1973-1978"]),
+                              "14" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1979-1983"]),
+                              "15" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1984-1994"]),
+                              "16" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "1995-2007"]),
+                              "17" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "2008-2009"]),
+                              "18" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "2009-2015"]), 
+                              "19" = 
+sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "2016-2017"]),
+                              "20" = sort(rare.bumbles.20period.df$abun[rare.bumbles.20period.df$time_bin == "2017-present"]))
+
+rare.20period.df <- iNEXT(rare.bumbles.20period, 
+             q = 0,
+             datatype = "abundance",
+             knots = 200,
+             # endpoint = 25,000,
+             nboot = 500)
+ggiNEXT(rare.20period.df,
+        color.var = "site")
+rareest.20period.df <- estimateD(rare.bumbles.20period,
+                                datatype = "abundance",
+                                base = "coverage",
+                                level = 0.985,
+                                conf = 0.95)
+rareest.20period.df$site <- as.numeric(as.character(rareest.20period.df$site))
+rareest.20period.df <- rareest.20period.df %>%
+  mutate(year = case_when(site == 1 ~ 1911,
+                          site == 2 ~ 1920,
+                          site == 3 ~ 1926,
+                          site == 4 ~ 1936,
+                          site == 5 ~ 1947,
+                          site == 6 ~ 1958,
+                          site == 7 ~ 1960,
+                          site == 8 ~ 1964,
+                          site == 9 ~ 1966,
+                          site == 10 ~ 1969,
+                          site == 11 ~ 1971,
+                          site == 12 ~ 1973,
+                          site == 13 ~ 1978,
+                          site == 14 ~ 1983,
+                          site == 15 ~ 1994,
+                          site == 16 ~ 2007,
+                          site == 17 ~ 2009,
+                          site == 18 ~ 2015,
+                          site == 19 ~ 2017,
+                          site == 20 ~ 2018))
+
+rareest.20period.plot <- rareest.20period.df %>%
+  filter(order == 0) %>%
+  mutate(year = case_when(site == 1 ~ 1911,
+                          site == 2 ~ 1920,
+                          site == 3 ~ 1926,
+                          site == 4 ~ 1936,
+                          site == 5 ~ 1947,
+                          site == 6 ~ 1958,
+                          site == 7 ~ 1960,
+                          site == 8 ~ 1964,
+                          site == 9 ~ 1966,
+                          site == 10 ~ 1969,
+                          site == 11 ~ 1971,
+                          site == 12 ~ 1973,
+                          site == 13 ~ 1978,
+                          site == 14 ~ 1983,
+                          site == 15 ~ 1994,
+                          site == 16 ~ 2007,
+                          site == 17 ~ 2009,
+                          site == 18 ~ 2015,
+                          site == 19 ~ 2017,
+                          site == 20 ~ 2018)) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = year, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  size = 0.8) +
+  geom_smooth(mapping = aes(x = year,
+                            y = qD),
+              method = "glm",
+              color = "black") + 
+  ylab("Estimated species richness") + 
+  xlab("Time Period") + 
+  theme_classic()
+rareest.20period.plot
+```
+
+## 15 bins (quantile method)
+```{r}
+bin15.bumbles.df <- rbin_quantiles(data = bumbles.df, 
+                                  response = species,
+                                  predictor = year,
+                                  bins = 15)
+bin15.test.df <- rbin_equal_freq(data = bumbles.df,
+                                 response = species,
+                                 predictor = year,
+                                 bins = 15)
+bin15.test.df
+bin15.bumbles.df
+
+bumbles.df <- bumbles.df %>%
+  mutate(bin_15 = case_when(
+    year < 1914 ~ "1824-1914",
+    between(year, 1914, 1925) ~ "1915-1925",
+    between(year, 1925, 1936) ~ "1926-1936",
+    between(year, 1936, 1951) ~ "1937-1951",
+    between(year, 1951, 1960) ~ "1952-1960",
+    between(year, 1960, 1964) ~ "1961-1964",
+    between(year, 1964, 1968) ~ "1965-1968",
+    between(year, 1968, 1970) ~ "1969-1970",
+    between(year, 1970, 1972) ~ "1971-1972",
+    between(year, 1972, 1982) ~ "1973-1982",
+    between(year, 1982, 1992) ~ "1983-1992",
+    between(year, 1992, 2007) ~ "1993-2007",
+    between(year, 2007, 2011) ~ "2008-2011",
+    between(year, 2011, 2017) ~ "2012-2017",
+    year >= 2017 ~ "2018-present",
+  ))
+
+bumbles.df$bin_15 <- factor(bumbles.df$bin_15,
+                           levels = c("1824-1914",
+                                      "1915-1925",
+                                      "1926-1936",
+                                      "1937-1951",
+                                      "1952-1960",
+                                      "1961-1964",
+                                      "1965-1968",
+                                      "1969-1970",
+                                      "1971-1972",
+                                      "1973-1982",
+                                      "1983-1992",
+                                      "1993-2007",
+                                      "2008-2011",
+                                      "2012-2017",
+                                      "2018-present"))
+table(bumbles.df$bin_15)
+
+rare.bumbles.15bin.df <- bumbles.df %>%
+  distinct(collector_spp_date,
+           .keep_all = TRUE) %>%
+  dplyr::select(species, bin_15) %>%
+  group_by(bin_15) %>%
+  count(species)
+rare.bumbles.15period.df <- data.frame(time_bin = rare.bumbles.15bin.df$bin_15,
+                                      abun = rare.bumbles.15bin.df$n)
+rare.bumbles.15period <- list("1" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1824-1914"]),
+                              "2" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1915-1925"]),
+                              "3" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1926-1936"]),
+                              "4" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1937-1951"]),
+                              "5" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1952-1960"]),
+                              "6" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1961-1964"]), 
+                              "7" = 
+sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1965-1968"]),
+                              "8" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1969-1970"]),
+                              "9" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1971-1972"]),
+                              "10" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1973-1982"]),
+                              "11" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1983-1992"]),
+                              "12" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1993-2007"]),
+                              "13" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "2008-2011"]),
+                              "14" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "2012-2017"]),
+                              "15" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "2018-present"]))
+
+rare.15period.df <- iNEXT(rare.bumbles.15period, 
+             q = 0,
+             datatype = "abundance",
+             knots = 200,
+             endpoint = 6000,
+             nboot = 500)
+ggiNEXT(rare.15period.df,
+        type = 1,
+        color.var = "site") + 
+  theme_histbumbles() + 
+  theme(legend.position = "none") +
+  scale_color_viridis_d(option = "inferno") + 
+  ggsave("./model_plots/specaccurve.eps",
+         width = 4,
+         height = 3)
+rareest.15period.df <- estimateD(rare.bumbles.15period,
+                                datatype = "abundance",
+                                base = "coverage",
+                                level = 0.985,
+                                conf = 0.95)
+rareest.15period.df$site <- as.numeric(as.character(rareest.15period.df$site))
+
+rareest.15period.df <- rareest.15period.df %>%
+  mutate(year = case_when(site == 1 ~ 1869,
+                          site == 2 ~ 1920,
+                          site == 3 ~ 1931,
+                          site == 4 ~ 1944,
+                          site == 5 ~ 1956,
+                          site == 6 ~ 1962,
+                          site == 7 ~ 1966,
+                          site == 8 ~ 1969,
+                          site == 9 ~ 1971,
+                          site == 10 ~ 1977,
+                          site == 11 ~ 1987,
+                          site == 12 ~ 2000,
+                          site == 13 ~ 2009,
+                          site == 14 ~ 2014,
+                          site == 15 ~ 2018))
+
+rareest.15period.plot <- rareest.15period.df %>%
+  filter(order == 0) %>%
+  mutate(year = case_when(site == 1 ~ 1869,
+                          site == 2 ~ 1920,
+                          site == 3 ~ 1931,
+                          site == 4 ~ 1944,
+                          site == 5 ~ 1956,
+                          site == 6 ~ 1962,
+                          site == 7 ~ 1966,
+                          site == 8 ~ 1969,
+                          site == 9 ~ 1971,
+                          site == 10 ~ 1977,
+                          site == 11 ~ 1987,
+                          site == 12 ~ 2000,
+                          site == 13 ~ 2009,
+                          site == 14 ~ 2014,
+                          site == 15 ~ 2018)) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = year, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  size = 0.8) +
+  geom_smooth(mapping = aes(x = year,
+                            y = qD),
+              method = "glm",
+              color = "black",
+              span = 0.75,
+              alpha = 1) + 
+  geom_rug(data = spatial.bumbles.df %>%
+             mutate(qD = 5),
+           mapping = aes(x = year,
+                         y = qD),
+           sides = "b",
+           position = "jitter",
+           alpha = 1) +
+  scale_x_continuous(limits = c(1860, 2020),
+                     breaks = seq(1860, 2020, by = 20)) + 
+  scale_y_continuous(limits = c(5, 20),
+                     breaks = seq(5, 20, by = 3)) +
+  ylab("Estimated species richness") + 
+  xlab("Time Period") + 
+  theme_classic()
+ggsave("./model_plots/diversity_trends.eps",
+       rareest.15period.plot,
+       width = 5,
+       height = 3)
+rareest.15period.plot
+rareest.15period.df
+```
+
+### LM/GLM
+```{r}
+speciestrend.lm <- lm(qD ~ year,
+                        data = rareest.15period.df %>%
+                        filter(order == 0))
+speciestrend.glm <- glm(qD ~ year,
+                        data = rareest.15period.df,
+                        family = Gamma(link = "inverse"))
+summary(speciestrend.glm)
+summary(speciestrend.lm)
+plot(speciestrend.lm)
+plot(speciestrend.glm)
+anova(speciestrend.lm, speciestrend.glm)
+anova(speciestrend.glm)
+
+rareest.15period.df %>%
+  filter(order == 0) %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = site,
+                           y = qD)) + 
+  geom_smooth(mapping = aes(x = site,
+                           y = qD),
+              method = "lm") +
+  theme_minimal()
+```
+
+
+## 15 bin - ag census midpoints
+```{r}
+bin15.bumbles.df <- rbin_quantiles(data = bumbles.df, 
+                                  response = species,
+                                  predictor = year,
+                                  bins = 15)
+bin15.bumbles.df
+
+bumbles.df <- bumbles.df %>%
+  mutate(bin_15 = case_when(
+    year < 1914 ~ "1824-1914",
+    between(year, 1914, 1925) ~ "1915-1925",
+    between(year, 1925, 1936) ~ "1926-1936",
+    between(year, 1936, 1951) ~ "1937-1951",
+    between(year, 1951, 1960) ~ "1952-1960",
+    between(year, 1960, 1964) ~ "1961-1964",
+    between(year, 1964, 1968) ~ "1965-1968",
+    between(year, 1968, 1970) ~ "1969-1970",
+    between(year, 1970, 1972) ~ "1971-1972",
+    between(year, 1972, 1982) ~ "1973-1982",
+    between(year, 1982, 1992) ~ "1983-1992",
+    between(year, 1992, 2007) ~ "1993-2007",
+    between(year, 2007, 2011) ~ "2008-2011",
+    between(year, 2011, 2017) ~ "2012-2017",
+    year >= 2017 ~ "2018-present",
+  ))
+
+bumbles.df$bin_15 <- factor(bumbles.df$bin_15,
+                           levels = c("1824-1914",
+                                      "1915-1925",
+                                      "1926-1936",
+                                      "1937-1951",
+                                      "1952-1960",
+                                      "1961-1964",
+                                      "1965-1968",
+                                      "1969-1970",
+                                      "1971-1972",
+                                      "1973-1982",
+                                      "1983-1992",
+                                      "1993-2007",
+                                      "2008-2011",
+                                      "2012-2017",
+                                      "2018-present"))
+table(bumbles.df$bin_15)
+
+rare.bumbles.15bin.df <- bumbles.df %>%
+  distinct(collector_spp_date,
+           .keep_all = TRUE) %>%
+  dplyr::select(species, bin_15) %>%
+  group_by(bin_15) %>%
+  count(species)
+rare.bumbles.15period.df <- data.frame(time_bin = rare.bumbles.15bin.df$bin_15,
+                                      abun = rare.bumbles.15bin.df$n)
+rare.bumbles.15period <- list("1" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1824-1914"]),
+                              "2" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1915-1925"]),
+                              "3" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1926-1936"]),
+                              "4" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1937-1951"]),
+                              "5" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1952-1960"]),
+                              "6" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1961-1964"]), 
+                              "7" = 
+sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1965-1968"]),
+                              "8" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1969-1970"]),
+                              "9" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1971-1972"]),
+                              "10" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1973-1982"]),
+                              "11" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1983-1992"]),
+                              "12" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "1993-2007"]),
+                              "13" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "2008-2011"]),
+                              "14" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "2012-2017"]),
+                              "15" = sort(rare.bumbles.15period.df$abun[rare.bumbles.15period.df$time_bin == "2018-present"]))
+
+rare.15period.df <- iNEXT(rare.bumbles.15period, 
+             q = 0,
+             datatype = "abundance",
+             knots = 200,
+             # endpoint = 25,000,
+             nboot = 500)
+ggiNEXT(rare.15period.df,
+        color.var = "site")
+rareest.15period.df <- estimateD(rare.bumbles.15period,
+                                datatype = "abundance",
+                                base = "coverage",
+                                level = 0.985,
+                                conf = 0.95)
+rareest.15period.df$site <- as.numeric(as.character(rareest.15period.df$site))
+
+rareest.15period.df <- rareest.15period.df %>%
+  mutate(year = case_when(site == 1 ~ 1869,
+                          site == 2 ~ 1920,
+                          site == 3 ~ 1931,
+                          site == 4 ~ 1944,
+                          site == 5 ~ 1956,
+                          site == 6 ~ 1962,
+                          site == 7 ~ 1966,
+                          site == 8 ~ 1969,
+                          site == 9 ~ 1971,
+                          site == 10 ~ 1977,
+                          site == 11 ~ 1987,
+                          site == 12 ~ 2000,
+                          site == 13 ~ 2009,
+                          site == 14 ~ 2014,
+                          site == 15 ~ 2018))
+
+rareest.15period.plot <- rareest.15period.df %>%
+  filter(order == 0) %>%
+  mutate(year = case_when(site == 1 ~ 1869,
+                          site == 2 ~ 1920,
+                          site == 3 ~ 1931,
+                          site == 4 ~ 1944,
+                          site == 5 ~ 1956,
+                          site == 6 ~ 1962,
+                          site == 7 ~ 1966,
+                          site == 8 ~ 1969,
+                          site == 9 ~ 1971,
+                          site == 10 ~ 1977,
+                          site == 11 ~ 1987,
+                          site == 12 ~ 2000,
+                          site == 13 ~ 2009,
+                          site == 14 ~ 2014,
+                          site == 15 ~ 2018)) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = year, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  size = 0.8) +
+  geom_smooth(mapping = aes(x = year,
+                            y = qD),
+              method = "glm",
+              color = "black",
+              span = 0.75,
+              alpha = 1) + 
+  geom_rug(data = spatial.bumbles.df %>%
+             mutate(qD = 5),
+           mapping = aes(x = year,
+                         y = qD),
+           sides = "b",
+           position = "jitter",
+           alpha = 1) +
+  scale_x_continuous(limits = c(1860, 2020),
+                     breaks = seq(1860, 2020, by = 20)) + 
+  scale_y_continuous(limits = c(5, 20),
+                     breaks = seq(5, 20, by = 3)) +
+  ylab("Estimated species richness") + 
+  xlab("Time Period") + 
+  theme_classic()
+ggsave("./model_plots/diversity_trends.eps",
+       rareest.15period.plot,
+       width = 5,
+       height = 3)
+rareest.15period.plot
+```
+
+### LM/GLM
+
 ## 8 bins
 ```{r}
 bin8.bumbles.df <- rbin_quantiles(data = bumbles.df, 
@@ -574,10 +1078,10 @@ for (i in species) {
            data = data.df,
            weights = total_bumbles,
            family = binomial(link = "logit"))
-  # plot(lm)
+  plot(lm)
   lm.df <- tidy(lm) %>%
     mutate(species = i) %>%
-    select(species, term, estimate, std.error, p.value) %>%
+    dplyr::select(species, term, estimate, std.error, p.value) %>%
     filter(term == "time_period_num")
   deltara.list[[i]] <- lm.df
 }
@@ -602,9 +1106,16 @@ deltara.df %>%
   coord_flip() + 
   theme_minimal()
 
+bumbles.relabun.df %>%
+  ggplot() +
+  geom_point(mapping = aes(x = bin_8,
+                           y = relative_abun)) + 
+  facet_wrap(~species) + 
+  theme_minimal()
+
 deltara.df
 paper.deltara.df <- bumbles.relabun.df %>%
-  select(species, bin_8, relative_abun) %>%
+  dplyr::select(species, bin_8, relative_abun) %>%
   spread(key = bin_8, value = relative_abun) %>%
   mutate_at(vars(-species), .funs = round, digits = 4) %>%
   left_join(bumbles.df %>%
@@ -612,9 +1123,9 @@ paper.deltara.df <- bumbles.relabun.df %>%
            summarise(n_records = n()),
            by = "species") %>%
   left_join(deltara.df %>%
-              select(species, estimate, p.value),
+              dplyr::select(species, estimate, p.value),
             by = "species") %>%
-  arrange %>%
+  filter(!species %in% c("Bombus ashtoni", "Bombus fraternus", "Bombus variabilis")) %>%
   write_csv("./deltara.csv")
 paper.deltara.df
 ```
@@ -1139,5 +1650,29 @@ bumble.georange.df %>%
   theme_void()
   # ggsave("range_by_time.png")
 bumble.georange.df
+```
+
+```{r}
+spatial.bumbles.df %>%
+  ggplot() + 
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               fill = "transparent",
+               color = "gray80",
+               size = 0.25,
+               na.rm = TRUE) + 
+  geom_point(mapping = aes(x = dec_long,
+                           y = dec_lat),
+             shape = 21,
+             color = "darkgray",
+             fill = "tomato") +    
+  coord_map("stereographic") +
+  # facet_wrap(~ species,
+  #            labeller = as_labeller(species),
+  #            ncol = 5) + 
+  theme_void() + 
+  ggsave("./model_plots/allbumbles.eps")
 ```
 

@@ -231,3 +231,6 @@ __January 16, 2019:__
 Per meeting with Claudio, have increased the number of temporal bins from which to estimate species richness.  Pretty much the same result.  Might play with making the cut-offs the same years as the ag census so that we can tie ag census averages to these data points for further evidence of ag stats driving this relationship.  Still unsure how to bin split that way... midpoint between ag census dates should get plenty of records per bin, and can drop those that don't meet the size req to accurately estimate species richness (isn't much - curves asymptote quickly: < 1000 records).
 
 __January 21, 2020:__ Need to write a new function to test spatial autocorrelation in the same context as the species glm models.  No evidence of strong temporal autocorrelation of the response (too much variation in relative abundance for each spp.), but spatial may still be a problem.  
+
+__February 3, 2020:__
+Adjusted secondary model so that pasture and pesticides were standardized by county area.  Changed the results quite a bit.  Pasture universally beneficial, pest. universally detrimental except 3 increasing species.  Temporal trends mirror that of pest. trends - all but three species are in decline.  Will need to re-work a couple of MS sections. 

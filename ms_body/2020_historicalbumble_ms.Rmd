@@ -70,7 +70,7 @@ We constructed models to determine whether changes in agricultural intensificati
 
 Because of the spatial nature of these data, we tested each species model for spatial autocorrelation by fitting data to generalized least squares models and then testing model residuals using a Moran's I test using the `spdep` package [@PACKAGE; similar to @Meehan2011; and @Meehan2015].  We also checked for temporal autocorrelation within the response of each species.  Because neither spatial nor temporal autocorrelation were found to be problematic, we utilized the generalized linear model framework described above across all species.
 
-To depict the estimated change relative abundance and range, we used our fitted models to predict relative abundance across historical ranges of each species within our study area using county-level agricultural intensification metrics. These maps describe the predicted probability of occurrence in each county as function of crop diversity and proportion of a county in cropland over time.  We selected 6 time points for which to fit models: 1870, 1900, 1930, 1959, 1974, and 2012 to depict how county suitability has changed over time.   While not a true species distribution model, these maps allow us to highlight the most suitable areas for a given species in terms of their relationship to agricultural intensification.  
+To depict the estimated change relative abundance and range, we used our fitted models to predict relative abundance across historical ranges of each species within our study area using county-level agricultural intensification metrics. These maps describe the predicted probability of occurrence in each county as function of crop diversity and proportion of a county in cropland over time.  We selected 6 time points for which to fit models: 1870, 1900, 1930, 1959, 1974, and 2012 to depict how county suitability has changed over time.   While not a true species distribution model, these maps allow us to highlight the most suitable areas for a given species in terms of their relationship to agricultural intensification.
 
 Another series of models were constructed to test more detailed hypothesized drivers of bumble bee decline.  Generalized linear models with a binomial error structure were fit to predict county-level species relative abundance as a function of pasture acreage, acreage treated with arthropod-targeting insecticides, and the agricultural census year.  Because the agricultural census did not begin capturing pesticide input data until 1982, these models were fit on a subset of data from 1982 to present.  By adding these more mechanistic drivers to the broad scale intensification metrics, we are able to see if the response of the broad scale metrics remains consistent given additional drivers.  If so, we can be confident that the results from the more temporal expansive analysis with broad drivers of agricultural intensification are tenable to explain the patterns of bumble bee relative abundance observed.
 
@@ -155,7 +155,7 @@ We would like to thank Christelle Guédot, John Orrock, and Russ Groves for the 
 \newpage
 ![](../ms_figs/fig2.png){ width=100% }
 
-**Figure 2:** Patterns of agricultural intensification in two metrics: (a) proportion of county under cultivation and (c) number of crops grown per county.  Inset graphs (b,d) depict general trend of these variables for each state in the study area as modeled by a Loess fitted curve.  Values beneath years are mean ± SEM.
+**Figure 2:** Patterns of agricultural intensification in two metrics: (a) proportion of county under cultivation and (c) number of crops grown per county.  Color palettes derived using quantile binning.  Inset graphs (b,d) depict general trend of these variables for each state in the study area as modeled by a Loess fitted curve.  Values beneath years are mean ± SEM.
 
 \clearpage
 
@@ -183,7 +183,7 @@ We would like to thank Christelle Guédot, John Orrock, and Russ Groves for the 
 
 \newpage
 <center>
-![](../ms_figs/fig4.png){ width=100% }
+![](../ms_figs/fig5.png){ width=100% }
 </center>
 
 **Figure 5:** Fitted model coefficients (± 95% confidence interval) for each study species for (A) temporal trend of the species, (B) proportion of county in cropland, and (C) the number of crops grown in a county, (D) acres of pasture grown in a county, and (E) acres treated with insecticides.  Models were fitted using data from 1982-present (only years for which pesticide and pasture acreage are available across all counties).  Point colors indicate species relative abundance trend from 1982-present: yellow points denote species whose relative abundance declined, gray points denote no change in relative abundance, and black points denote increases in relative abundance.
@@ -229,7 +229,7 @@ We would like to thank Christelle Guédot, John Orrock, and Russ Groves for the 
 <center>
 ![](../ms_figs/fig_s2.png){ width=100% }
 </center>
-**Supplementary Figure 2:** Patterns of agricultural intensification in two metrics additional metrics from 1982-2012: (a) total acres of pasture per county and (c) total acreage treated with insecticides per county.  Inset graphs (b,d) depict general trend of these two variables for each state in the study area as modeled by a Loess fitted curve.  Values beneath years are mean acres ± SEM.
+**Supplementary Figure 2:** Patterns of agricultural intensification in two metrics additional metrics from 1982-2012: (a) total acres of pasture per county and (c) total acreage treated with insecticides per county.  Color palettes derived using quantile binning.  Inset graphs (b,d) depict general trend of these two variables for each state in the study area as modeled by a Loess fitted curve.  Values beneath years are mean acres ± SEM.
 
 \clearpage
 

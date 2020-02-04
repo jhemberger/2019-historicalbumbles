@@ -718,8 +718,56 @@ rareest.5period.plot <- rareest.5period.df %>%
                             y = qD),
               method = "lm",
               color = "black") + 
-  theme_minimal()
+  theme_histbumbles()
+
+rareest.5period.plot <- rareest.5period.df %>%
+    filter(order == 0) %>%
+  mutate(year = case_when(site == 1 ~ 1880,
+                          site == 2 ~ 1950,
+                          site == 3 ~ 1968,
+                          site == 4 ~ 1989,
+                          site == 5 ~ 2010)) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = year, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  size = 0.8) +
+  geom_smooth(mapping = aes(x = year,
+                            y = qD),
+              method = "glm",
+              color = "black",
+              span = 0.75,
+              alpha = 1) + 
+  geom_rug(data = spatial.bumbles.df %>%
+             mutate(qD = 5),
+           mapping = aes(x = year,
+                         y = qD),
+           sides = "b",
+           position = "jitter",
+           alpha = 1) +
+  scale_x_continuous(limits = c(1860, 2020),
+                     breaks = seq(1860, 2020, by = 20)) + 
+  scale_y_continuous(limits = c(5, 20),
+                     breaks = seq(5, 20, by = 3)) +
+  ylab("Estimated species richness") + 
+  xlab("Time Period") + 
+  theme_classic()
 rareest.5period.plot
+ggsave("./model_plots/diversity_trends_5.eps",
+       rareest.5period.plot,
+       width = 5,
+       height = 3)
+
+speciestrend.5.lm <- lm(qD ~ year,
+                        data = rareest.5period.df %>%
+                          mutate(year = case_when(site == 1 ~ 1880,
+                          site == 2 ~ 1950,
+                          site == 3 ~ 1968,
+                          site == 4 ~ 1989,
+                          site == 5 ~ 2010)) %>%
+                        filter(order == 0))
+summary(speciestrend.5.lm)
 ```
 
 ### 8 period estimated spp. richness
@@ -756,23 +804,23 @@ rareest.8period.df <- estimateD(rare.bumbles.8period,
                                 conf = 0.95)
 rareest.8period.df$site <- as.numeric(as.character(rareest.8period.df$site))
 rareest.8period.df <- rareest.8period.df %>%
-  mutate(year = case_when(site == 1 ~ 1900,
-                          site == 2 ~ 1926,
-                          site == 3 ~ 1951,
-                          site == 4 ~ 1964,
-                          site == 5 ~ 1970,
-                          site == 6 ~ 1978,
-                          site == 7 ~ 1997,
+  mutate(year = case_when(site == 1 ~ 1874,
+                          site == 2 ~ 1938,
+                          site == 3 ~ 1957,
+                          site == 4 ~ 1966,
+                          site == 5 ~ 1973,
+                          site == 6 ~ 1987,
+                          site == 7 ~ 2005,
                           site == 8 ~ 2014))
 rareest.8period.plot <- rareest.8period.df %>%
   filter(order == 0) %>%
-  mutate(year = case_when(site == 1 ~ 1900,
-                          site == 2 ~ 1926,
-                          site == 3 ~ 1951,
-                          site == 4 ~ 1964,
-                          site == 5 ~ 1970,
-                          site == 6 ~ 1978,
-                          site == 7 ~ 1997,
+  mutate(year = case_when(site == 1 ~ 1874,
+                          site == 2 ~ 1938,
+                          site == 3 ~ 1957,
+                          site == 4 ~ 1966,
+                          site == 5 ~ 1973,
+                          site == 6 ~ 1987,
+                          site == 7 ~ 2005,
                           site == 8 ~ 2014)) %>%
   ggplot() + 
   geom_pointrange(mapping = aes(x = year, 
@@ -783,12 +831,25 @@ rareest.8period.plot <- rareest.8period.df %>%
   geom_smooth(mapping = aes(x = year,
                             y = qD),
               method = "glm",
-              color = "black") + 
+              color = "black",
+              span = 0.75,
+              alpha = 1) + 
+  geom_rug(data = spatial.bumbles.df %>%
+             mutate(qD = 5),
+           mapping = aes(x = year,
+                         y = qD),
+           sides = "b",
+           position = "jitter",
+           alpha = 1) +
+  scale_x_continuous(limits = c(1860, 2020),
+                     breaks = seq(1860, 2020, by = 20)) + 
+  scale_y_continuous(limits = c(5, 20),
+                     breaks = seq(5, 20, by = 3)) +
   ylab("Estimated species richness") + 
   xlab("Time Period") + 
   theme_classic()
 rareest.8period.plot
-ggsave("./model_plots/diversity_trends.eps",
+ggsave("./model_plots/diversity_trends8.eps",
        rareest.8period.plot,
        width = 5,
        height = 3)
@@ -801,6 +862,11 @@ summary(glm(qD ~ site,
     data = rareest.8period.df %>%
       filter(order == 0),
     family = gaussian))
+
+speciestrend.8.lm <- lm(qD ~ year,
+                        data = rareest.8period.df %>%
+                        filter(order == 0))
+summary(speciestrend.8.lm)
 ```
 
 #### Permutation test
@@ -1663,7 +1729,7 @@ spatial.bumbles.df %>%
                color = "gray80",
                size = 0.25,
                na.rm = TRUE) + 
-  geom_point(mapping = aes(x = dec_long,
+  geom_jitter(mapping = aes(x = dec_long,
                            y = dec_lat),
              shape = 21,
              color = "darkgray",
@@ -1672,7 +1738,10 @@ spatial.bumbles.df %>%
   # facet_wrap(~ species,
   #            labeller = as_labeller(species),
   #            ncol = 5) + 
-  theme_void() + 
+  facet_wrap(~bin_ag) +
+  theme_void() +
   ggsave("./model_plots/allbumbles.eps")
+
+table(spatial.bumbles.df$bin_ag)
 ```
 

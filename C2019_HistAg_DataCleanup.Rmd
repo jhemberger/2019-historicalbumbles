@@ -20,6 +20,7 @@ library(gridExtra)
 library(gganimate)
 library(transformr)
 library(cowplot)
+library(openintro)
 ```
 
 # Load in Mike's proportion ag data
@@ -241,21 +242,21 @@ ggsave("./model_plots/propag_trend.eps",
 ## Mechanistic vars (pasture + pesticides)
 ```{r}
 midwestag.othervars2.df <- midwestag.othervars.df %>%
-  left_join(midwest.countyarea.df,
+  right_join(midwest.countyarea.df, ###CHANGE THIS TO LEFT JOIN 
             by = c("state_name" = "state",
                    "county_name" = "county")) %>%
   mutate(prop_pasture = pastureac / area_acres_2000,
-         prop_pest = pestac / area_acres_2000)
+         prop_pest = pestac / area_acres_2000) %>% 
   filter(!county_name %in% c("Wisconsin", "Iowa", "Illinois", "Indiana", "Michigan", "Minnesota"))
 ```
 
 ## Combine data
 ```{r}
 midwestag.vars.df <- midwestag.evenness.df %>%
-  left_join(midwestag.cropprop.df,
+  right_join(midwestag.cropprop.df,
             by = c("STATE" = "STATE", 
                    "COUNTY" = "COUNTY", 
-                   "year" = "year")) %>%
+                   "year" = "year")) %>% # This will include counties with 0 crop area/crops (NA?)
   separate(COUNTY,
            sep = -7,
            into = "county") %>%
@@ -263,7 +264,10 @@ midwestag.vars.df <- midwestag.evenness.df %>%
   dplyr::select(state, everything()) %>%
   ungroup() %>%
   dplyr::select(-STATE)
-midwestag.vars.df
+midwestag.vars.df <- midwestag.vars.df %>%
+  replace_na(replace = list(n_crops = 0))
+
+
 
 write_csv(midwestag.vars.df,
           "./midwestag_vars.csv")
@@ -631,7 +635,7 @@ pastureac.plot <- midwestag.othervars2.df %>%
                     breaks = rev(ppast_brks_scale),
                     name = "Proportion county in pasture",
                     drop = FALSE,
-                    labels = rev(ncrop_brks_scale)) +
+                    labels = rev(ppast_brks_scale)) +
   # scale_fill_gradient(low = "#FFFFFF",
   #                     high = "#F9A242",
   #                     na.value = "#FFFFFF",
@@ -907,7 +911,7 @@ midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "Mclean
 midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "Mcdonough"] <- "McDonough"
 midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "La Porte"] <- "LaPorte"
 midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "St. Joseph"] <- "Saint Joseph"
-midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "LeGrange"] <- "LaGrange"
+midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "Lagrange"] <- "LaGrange"
 midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "St. Joseph"] <- "Saint Joseph"
 midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "O''Brien"] <- "O'Brien"
 midwestag.othervars.df$county_name[midwestag.othervars.df$county_name == "O'brien"] <- "O'Brien"

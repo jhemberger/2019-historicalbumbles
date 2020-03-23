@@ -40,6 +40,7 @@ library(spdplyr)
 
 # Import data
 ```{r}
+spatial.bumbles2.df <- read_csv("./spatial_bumbles.csv")
 spatial.bumbles.df <- read_csv("./spatial_bumbles.csv") %>%
   dplyr::select(date, year, species, subgenus, dec_lat, dec_long, state, county, region, decade, t_period, time_period, 
                 bin_3, bin_5, bin_8, collector_spp_date)
@@ -512,7 +513,7 @@ moran.lm$p.value[1,1]
 moran.test <- moran.test(imp.model$residuals, 
                          weights,
                          zero.policy = TRUE)
-moran.test
+moran.test$p.value
 ```
 
 ### Legrange multiplier test
@@ -612,7 +613,7 @@ spatial.regression.spp <- function(spdf) {
     # Create spatial weights matrix
     weights.queen.list <- poly2nb(i,
                                   queen = TRUE)
-    if (sum(unlist(weights.queen.list)) > 0){
+    if (sum(unlist(weights.queen.list)) > 0) {
       weights <- nb2listw(weights.queen.list,
                           style = "W",
                           zero.policy = TRUE)

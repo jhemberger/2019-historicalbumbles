@@ -95,7 +95,8 @@ spatial.bumbles.df <- spatial.bumbles.df %>%
     between(year, 1976, 1985) ~ 1982,
     between(year, 1986, 1995) ~ 1992, 
     between(year, 1996, 2005) ~ 2002,
-    between(year, 2006, 2019) ~ 2012),
+    between(year, 2006, 2014) ~ 2012,
+    between(year, 2015, 2019) ~ 2017),
     cmn.rare = if_else(species %in% c("Bombus impatiens",
                                       "Bombus bimaculatus",
                                       "Bombus griseocollis",
@@ -136,7 +137,8 @@ spatial.bumbles.2yr.df <- spatial.bumbles.2yr.df %>%
     between(year, 1979, 1985) ~ 1982,
     between(year, 1989, 1995) ~ 1992,
     between(year, 1999, 2005) ~ 2002,
-    between(year, 2009, 2015) ~ 2012)) %>%
+    between(year, 2009, 2015) ~ 2012,
+    between(year, 201))) %>%
   filter(!is.na(bin_ag))
 spatial.bumbles.2yr.df
 
@@ -236,9 +238,10 @@ spatial.bumbles.glmvars.no12.df
 ```
 
 # TEST FOR SPATIAL AUTOCORRELATION
+## Create spdf
 ```{r}
 spatial.bumbles.glmvars.df
-spatial.corr.test.df <- spatial.bumbles.glmvars.df %>%
+spatial.corr.test.df <- spatial.bumbles.glmvars2.df %>%
   mutate(state_full = abbr2state(state)) %>%
   left_join(countycode.df,
             by = c("state_full" = "state",
@@ -309,6 +312,7 @@ spatial.corr.test <- function(spdf) {
     moran.test <- moran.test(ols.model$residuals,
                                weights,
                                zero.policy = TRUE)
+    # print(moran.test)
     ols.df <- ols.df %>%
       mutate(moran_pvalue = moran.test$p.value)
     # print(moran.test$p.value)
@@ -321,11 +325,14 @@ spatial.corr.test <- function(spdf) {
     modelresults.list[[listnumber]] <- ols.df
     
     # SARMA Model
-    fit.sma <- spautolm(rel_abun ~ scale(n_crops) + scale(prop_cropland) + scale(bin_ag),
-                        data = i,
-                        weights = bin_ag_abundance,
-                        listw = weights,
-                        family = "SMA")
+    fit.sma <- errorsarlm(rel_abun ~ 
+                            n_crops + 
+                            prop_cropland + 
+                            bin_ag,
+                          data = i,
+                          weights = bin_ag_abundance,
+                          listw = weights,
+                          zero.policy = TRUE)
     sarma.model.df <- tibble(term = c("(Intercept)",
                                       "n_crops",
                                       "prop_cropland",
@@ -360,6 +367,7 @@ spatial.corr.test <- function(spdf) {
 ## Run spatial.corr.test function
 ```{r}
 spatial.corr.test(spatial.corr.test.spdf)
+sarma.models.list[[1]] <- NULL
 names(sarma.models.list) <- species
 ```
 
@@ -716,7 +724,7 @@ glms.df %>%
                            digits = 4),
          upper.ci = round(upper.ci,
                            digits = 4)) %>%
-    write_csv("./model_output/sppglm_red.csv")
+    write_csv("./model_output/sppglm.csv")
 ```
 
 ##### prop_agriculture
@@ -832,121 +840,6 @@ ggsave("./model_plots/coefs/year_2yr.eps",
        coef.year.plot,
        width = 4,
        height = 4)
-```
-
-### Use `plot_summs`
-```{r}
-list2env(glm.output.list,
-         envir = .GlobalEnv)
-
-year.coef.plot <- plot_summs(`Bombus affinis`, 
-                             `Bombus ashtoni`,
-                             `Bombus auricomus`,
-                             `Bombus bimaculatus`,
-                             `Bombus borealis`,
-                             `Bombus citrinus`,
-                             `Bombus fervidus`,
-                             `Bombus fraternus`, 
-                             `Bombus impatiens`,
-                             `Bombus pensylvanicus`,
-                             `Bombus rufocinctus`,
-                             `Bombus ternarius`,
-                             `Bombus terricola`,
-                             `Bombus vagans`,
-                             `Bombus variabilis`,
-                             model.names = c("B. affinis",
-                                             "B. ashtoni",
-                                             "B. auricomus",
-                                             "B. bimaculatus",
-                                             "B. borealis", 
-                                             "B. citrinus",
-                                             "B. fervidus",
-                                             "B. fraternus",
-                                             "B. impatiens",
-                                             "B. pensylvanicus",
-                                             "B. rufocinctus",
-                                             "B. ternarius",
-                                             "B. terricola",
-                                             "B. vagans",
-                                             "B. variablis"),
-                             coefs = c("Year" = "bin_ag"),
-                             colors = "inferno",
-                             point.shape = FALSE,
-                             plot.distributions = FALSE,
-                             rescale.distributions = FALSE)
-ncrop.coef.plot <- plot_summs(`Bombus affinis`, 
-                              `Bombus ashtoni`,
-                              `Bombus auricomus`,
-                              `Bombus bimaculatus`,
-                              `Bombus borealis`,
-                              `Bombus citrinus`,
-                              `Bombus fervidus`,
-                              `Bombus fraternus`, 
-                              `Bombus impatiens`,
-                              `Bombus pensylvanicus`,
-                              `Bombus rufocinctus`,
-                              `Bombus ternarius`,
-                              `Bombus terricola`,
-                              `Bombus vagans`,
-                              `Bombus variabilis`,
-                              model.names = c("B. affinis",
-                                              "B. ashtoni",
-                                              "B. auricomus",
-                                              "B. bimaculatus",
-                                              "B. borealis", 
-                                              "B. citrinus",
-                                              "B. fervidus",
-                                              "B. fraternus",
-                                              "B. impatiens",
-                                              "B. pensylvanicus",
-                                              "B. rufocinctus",
-                                              "B. ternarius",
-                                              "B. terricola",
-                                              "B. vagans",
-                                              "B. variablis"),
-                              coefs = c("n Crops" = "n_crops"),
-                              colors = "inferno",
-                              point.shape = FALSE,
-                              plot.distributions = TRUE,
-                              rescale.distributions = FALSE)
-propcrop.coef.plot <- plot_summs(`Bombus affinis`, 
-                                 `Bombus ashtoni`,
-                                 `Bombus auricomus`,
-                                 `Bombus bimaculatus`,
-                                 `Bombus borealis`,
-                                 `Bombus citrinus`,
-                                 `Bombus fervidus`,
-                                 `Bombus fraternus`, 
-                                 `Bombus impatiens`,
-                                 `Bombus pensylvanicus`,
-                                 `Bombus rufocinctus`,
-                                 `Bombus ternarius`,
-                                 `Bombus terricola`,
-                                 `Bombus vagans`,
-                                 `Bombus variabilis`,
-                                 model.names = c("B. affinis",
-                                                 "B. ashtoni",
-                                                 "B. auricomus",
-                                                 "B. bimaculatus",
-                                                 "B. borealis", 
-                                                 "B. citrinus",
-                                                 "B. fervidus",
-                                                 "B. fraternus",
-                                                 "B. impatiens",
-                                                 "B. pensylvanicus",
-                                                 "B. rufocinctus",
-                                                 "B. ternarius",
-                                                 "B. terricola",
-                                                 "B. vagans",
-                                                 "B. variablis"),
-                                 coefs = c("Proportion cropland per county" = "prop_cropland"),
-                                 colors = "inferno",
-                                 point.shape = FALSE,
-                                 plot.distributions = TRUE,
-                                 rescale.distributions = FALSE)
-year.coef.plot
-ncrop.coef.plot
-propcrop.coef.plot
 ```
 
 # MODEL SPECIES RICHNESS
@@ -1471,10 +1364,10 @@ species.2.glms <- function(data) {
     # print(model.df)
     glm.model <- glm(rel_abun ~ 
                        n_crops + 
-                       prop_cropland +
+                       # prop_cropland +
                        prop_pasture + 
                        prop_pest + 
-                       # avgfarm +
+                       prop_cc +
                        bin_ag,
                      data = model.df,
                      weights = model.df$bin_ag_abundance,
@@ -1499,9 +1392,9 @@ species.2.glms <- function(data) {
                             as.tibble(predict$prop_pest) %>%
                               rename(new_x = prop_pest) %>%
                               mutate(var = "prop_pest"),
-                            # as.tibble(predict$avgfarm) %>%
-                            #   rename(new_x = avgfarm) %>%
-                            #   mutate(var = "avgfarm"),
+                            as.tibble(predict$prop_cc) %>%
+                              rename(new_x = prop_cc) %>%
+                              mutate(var = "prop_cc"),
                             as.tibble(predict$bin_ag) %>%
                               rename(new_x = bin_ag) %>%
                               mutate(var = "bin_ag"))
@@ -1521,7 +1414,7 @@ species.2.glms <- function(data) {
                                 ymax = upper),
                   fill = "#F22B29",
                   color = "black",
-                  alpha = 1) +
+                  alpha = 0.1) +
       geom_line(data = predict.df %>%
                   filter(var == "bin_ag"),
                 mapping = aes(x = new_x,
@@ -1543,7 +1436,7 @@ species.2.glms <- function(data) {
       ylab(label = "Proportional Abundance") + 
       xlab(label = "Year") + 
       labs(title = paste(i,
-                         "proportional abundance 1870-present",
+                         "proportional abundance 1982-present",
                          sep = " "))
     # ggsave(plot = trend.plot,
     #        filename = paste("./model_plots/trends/",
@@ -1569,7 +1462,7 @@ species.2.glms <- function(data) {
                                 ymax = upper),
                   fill = "#140F2D",
                   color = "black",
-                  alpha = 1) +
+                  alpha = 0.1) +
       geom_line(data = predict.df %>%
                   filter(var == "prop_pasture"),
                 mapping = aes(x = new_x,
@@ -1590,34 +1483,34 @@ species.2.glms <- function(data) {
     #        height = 4,
     #        width = 5)
     #        
-    # avgfarm.plot <- ggplot() + 
+    # propcc.plot <- ggplot() +
     #   geom_point(data = model.df ,
-    #              mapping = aes(x = avgfarm,
+    #              mapping = aes(x = prop_cc,
     #                            y = rel_abun),
     #              shape = 21,
     #              fill = "black",
     #              color = "black",
     #              alpha = 1,
-    #              position = position_jitter()) + 
+    #              position = position_jitter()) +
     #   geom_ribbon(data = predict.df %>%
-    #                 filter(var == "avgfarm"),
+    #                 filter(var == "prop_cc"),
     #               mapping = aes(x = new_x,
     #                             ymin = lower,
     #                             ymax = upper),
     #               fill = "#140F2D",
     #               color = "black",
-    #               alpha = 1) +
+    #               alpha = 0.1) +
     #   geom_line(data = predict.df %>%
-    #               filter(var == "avgfarm"),
+    #               filter(var == "prop_cc"),
     #             mapping = aes(x = new_x,
     #                           y = fit),
     #             size = 1.25,
-    #             color = "#140F2D") + 
-    #   theme_histbumbles() + 
+    #             color = "#140F2D") +
+    #   theme_histbumbles() +
     #   # scale_x_continuous(limits = c(1870, 2020),
     #   #                    breaks = seq(1870, 2020, by = 20)) +
-    #   ylab(label = "Proportional Abundance") + 
-    #   xlab(label = "Average Size of Farm (acres)") + 
+    #   ylab(label = "Proportional Abundance") +
+    #   xlab(label = "Proportion of county in cover crop") +
     #   labs(title = i)
     # ggsave(plot = ncrop.plot,
     #        filename = paste("./model_plots/ncrops/",
@@ -1642,9 +1535,9 @@ species.2.glms <- function(data) {
                                 ymax = upper),
                   fill = "#140F2D",
                   color = "black",
-                  alpha = 1) +
+                  alpha = 0.1) +
       geom_line(data = predict.df %>%
-                  filter(var == "prop_peset"),
+                  filter(var == "prop_pest"),
                 mapping = aes(x = new_x,
                               y = fit),
                 size = 1.25,
@@ -1664,12 +1557,12 @@ species.2.glms <- function(data) {
     #        width = 5)
     print(trend.plot)
     print(pastureac.plot)
-    # print(avgfarm.plot)
+    # print(propcc.plot)
     print(pestac.plot)
     trend.plots.list[[i]] <- trend.plot
     pastureac.plots.list[[i]] <- pastureac.plot
     pestac.plots.list[[i]] <- pestac.plot
-    # avgfarm.plots.list[[i]] <- avgfarm.plot
+    # avgfarm.plots.list[[i]] <- propcc.plot
   }
   assign("glm.output2.list",
          glm.list,
@@ -1686,15 +1579,25 @@ species.2.glms <- function(data) {
 ## Run GLM2 function
 ```{r}
 spatial.bumbles.glmvars2.df <- spatial.bumbles.glmvars.df %>%
-  left_join(midwestag.othervars2.df,
+  ungroup() %>%
+  dplyr::select(species, subgenus, state, county, bin_ag, species_abun, bin_ag_abundance,
+         rel_abun, n_crops, prop_cropland) %>%
+  left_join(midwestag.othervars2.df %>%
+              filter(!is.na(year)) %>%
+              mutate(bin_ag = year) %>%
+              dplyr::select(bin_ag, state_name, county_name, avgfarm, cloverac, pestac, pastureac, prop_pasture, prop_pest, prop_cc),
             by = c("state" = "state_name",
-                   "county" = "county_name")) %>%
+                   "county" = "county_name",
+                   "bin_ag" = "bin_ag")) %>%
   # dplyr::select(-c(crop_evenness, fertexp, covercropac)) %>%
   drop_na(prop_pasture, prop_pest) %>%
   filter(!species %in% c("Bombus ashtoni",
                          "Bombus fraternus",
                          "Bombus variabilis")) %>%
   filter(bin_ag_abundance > 5)
+
+
+unique(midwestag.othervars2.df$state_name)
 spatial.bumbles.glmvars2.df %>%
   group_by(species) %>%
   summarise(n = n())
@@ -1729,7 +1632,7 @@ glms2.df
 
 ## Plot GLM coefficients
 ### Use `ggplot`
-#### Scale coefficients
+ #### Scale coefficients
 ```{r}
 scale_coefs2 <- function(model.list) {
   df.list <- list()
@@ -1742,9 +1645,10 @@ scale_coefs2 <- function(model.list) {
     glm.df <- as.data.frame(summ.glm[["coeftable"]]) %>%
       mutate(term = c("(Intercept)",
                       "n_crops",
-                      "prop_cropland",
+                      # "prop_cropland",
                       "prop_pasture",
                       "prop_pest",
+                      "prop_cc",
                       "bin_ag")) %>%
       dplyr::select("term" = "term",
                     "estimate" = "Est.",
@@ -1777,9 +1681,10 @@ glms2.df %>%
                            digits = 4),
          upper.ci = round(upper.ci,
                            digits = 4)) %>%
-    write_csv("./model_output/sppglm2.csv")
+    write_csv("./model_output/sppglm_1982_2018.csv")
 
 ```
+
 #### pastureac
 ```{r}
 coef.pastac.plot <- glms2.df %>%
@@ -1814,7 +1719,7 @@ coef.pastac.plot <- glms2.df %>%
   #                    breaks = seq(-10,
   #                                 2.5,
   #                                 by = 2)) +
-  theme_minimal() +
+  theme_histbumbles() +
   coord_flip()
 coef.pastac.plot
 ggsave("./model_plots/coefs/pastac.eps",
@@ -1865,13 +1770,13 @@ ggsave("./model_plots/coefs/pestac.eps",
        coef.pestac.plot,
        width = 4,
        height = 4)
-
+range(spatial.bumbles.glmvars2.df$prop_cc, na.rm = TRUE)
 ```
-#### prop_agriculture
+#### cover crop
 ```{r}
-coef.pag2.plot <- glms2.df %>%
+coef.propcc.plot <- glms2.df %>%
   # filter(n_records > 60) %>%
-  filter(term == "prop_cropland") %>%
+  filter(term == "prop_cc") %>%
   arrange(desc(estimate)) %>%
   mutate(row_order = factor(species,
                             levels = species)) %>%
@@ -1902,9 +1807,9 @@ coef.pag2.plot <- glms2.df %>%
   #                         y = estimate),
   #           label = "*",
   #           position = position_dodge(width = 0.9)) +
-  theme_minimal() +
+  theme_histbumbles() +
   coord_flip()
-coef.pag2.plot
+coef.avgfarm.plot
 ggsave("./model_plots/coefs/prop_cropland_2.eps",
        coef.pag2.plot,
        width = 4,
@@ -1946,7 +1851,7 @@ coef.ncrops2.plot <- glms2.df %>%
   #                         y = estimate),
   #           label = "*",
   #           position = position_dodge(width = 0.9)) +
-  theme_minimal() +
+  theme_histbumbles() +
   coord_flip()
 coef.ncrops2.plot
 ggsave("./model_plots/coefs/n_crops_2.eps",
@@ -1990,7 +1895,7 @@ coef.year2.plot <- glms2.df %>%
   #                         y = estimate),
   #           label = "*",
   #           position = position_dodge(width = 0.9)) +
-  theme_minimal() +
+  theme_histbumbles() +
   coord_flip()
 coef.year.plot
 ggsave("./model_plots/coefs/year_2.eps",
@@ -1998,7 +1903,6 @@ ggsave("./model_plots/coefs/year_2.eps",
        width = 4,
        height = 4)
 ```
-
 
 # RANGE/COUNTY SHIFTS
 ## Prep data
@@ -2071,6 +1975,20 @@ spatial.bumbles.range2.df
 
 
 county.time.trend.plot <- spatial.bumbles.range.df %>%
+  group_by(species) %>%
+  mutate(order = factor(species, levels = c("Bombus fervidus",
+                                            "Bombus terricola",
+                                            "Bombus pensylvanicus",
+                                            "Bombus affinis",
+                                            "Bombus borealis",
+                                            "Bombus vagans",
+                                            "Bombus ternarius",
+                                            "Bombus citrinus",
+                                            "Bombus rufocinctus",
+                                            "Bombus impatiens",
+                                            "Bombus auricomus",
+                                            "Bombus bimaculatus",
+                                            "Bombus griseocollis"))) %>%
   ggplot() + 
   geom_point(mapping = aes(x = year,
                            y = n_counties),
@@ -2086,14 +2004,15 @@ county.time.trend.plot <- spatial.bumbles.range.df %>%
   # scale_x_continuous(limits = c(1840, 2020),
   #                    breaks = seq(1840, 2020, by = 30)) +
   # scale_y_continuous(limits = c(0, 250)) +
-  facet_wrap(~ species) +
+  facet_wrap(~ order,
+             scales = "free_y") +
   theme_histbumbles()
 county.time.trend.plot
   
 ggsave("./model_plots/county_time_trends.eps",
        county.time.trend.plot,
-       height = 6,
-       width = 10)
+       height = 4.5,
+       width = 7)
 
 ```
 
@@ -2152,12 +2071,12 @@ left_join(bumbles.df %>%
 species.range.plot <- spatial.bumbles.rangera.df %>%
   ggplot() +
   geom_point(mapping = aes(x = year,
-                           y = n_counties),
+                           y = county_ra),
              shape = 21,
              size = 3,
              fill = "black") +
   geom_smooth(mapping = aes(x = year,
-                            y = n_counties),
+                            y = county_ra),
               method = "glm",
               #span = 1,
               se = TRUE,
@@ -2167,7 +2086,8 @@ species.range.plot <- spatial.bumbles.rangera.df %>%
   # scale_y_continuous(limits = c(-10, 120)) +
   theme(axis.text.x = element_text(angle = 90)) +
   theme(axis.text.x = element_text(angle = 90)) + 
-  facet_wrap(~ species) +
+  facet_wrap(~ species,
+             scales = "free_y") +
   theme_histbumbles()
 species.range.plot
 ggsave("./model_plots/county_change.eps",
@@ -2348,8 +2268,8 @@ range.glm.plot1 <- glms.range.df %>%
   coord_flip() +
   ggsave("./model_plots/coefs/n_counties.eps",
        range.glm.plot1,
-       width = 4.5,
-       height = 4.5)
+       width = 3.75,
+       height = 3.75)
 range.glm.plot1
 ```
 

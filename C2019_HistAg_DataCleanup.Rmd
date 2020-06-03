@@ -25,7 +25,7 @@ library(openintro)
 
 # Load in Mike's proportion ag data
 ```{r}
-histag2.df <- read_tsv("./AgCensus_MasterDataFrame.txt")
+histag2.df <- read_tsv("./AgCensus_MasterDataFrame_2020.txt")
 ```
 
 ## Create crop code data frame
@@ -52,7 +52,9 @@ cropcode.df <- tibble(crop_abbr = c("Brl",
                                     "Hrs",
                                     "Hmn",
                                     "Shp",
-                                    "Swn"),
+                                    "Swn",
+                                    "Tky",
+                                    "Ckn"),
                       crop_name = c("Barley",
                                     "Buckwheat",
                                     "Corn",
@@ -75,7 +77,9 @@ cropcode.df <- tibble(crop_abbr = c("Brl",
                                     "Horse",
                                     "Human",
                                     "Sheep",
-                                    "Swine"))
+                                    "Swine",
+                                    "Turkey",
+                                    "Chicken"))
 ```
 
 
@@ -92,7 +96,7 @@ histag2.df <- histag2.df %>%
   left_join(cropcode.df,
             by = c("crop" = "crop_abbr"))
 histag2.df <- histag2.df %>%
-  filter(!crop %in% c("Cat", "Hrs", "Hmn", "Shp", "Swn"))
+  filter(!crop %in% c("Cat", "Hrs", "Hmn", "Shp", "Swn", "Tky", "Ckn"))
 histag2.df$year <- as.numeric(histag2.df$year)
 histag2.df
 ```
@@ -113,11 +117,13 @@ midwestag.countysize.df <- midwestag.bycrop.df %>%
   separate(county,
            sep = -7,
            into = "county") %>%
-  mutate(area_acres = area_km * 247.105)
+  mutate(area_acres = area_km * 247.105,
+         state_cty = paste(state, county, sep = "_")) %>%
+  distinct(state_cty, .keep_all = TRUE)
 
-us.countyarea.df <- read_csv("./us_countyarea.csv") 
-midwest.countyarea.df <- us.countyarea.df %>%
-  filter(state %in% c("IA", "IL", "IN", "MN", "MI", "WI"))
+# us.countyarea.df <- read_csv("./us_countyarea.csv") 
+# midwest.countyarea.df <- us.countyarea.df %>%
+#   filter(state %in% c("IA", "IL", "IN", "MN", "MI", "WI"))
 ```
 
 # Calculate ag predictors (Mike's data)
@@ -148,8 +154,8 @@ ggplot() +
   #                    colour = "red", size = 0.5) + 
   xlab(label = "Year") +
   ylab(label = "Number of crops grown") + 
-  scale_x_continuous(limits = c(1870, 2010),
-                     breaks = seq(1870, 2010, by = 20)) + 
+  scale_x_continuous(limits = c(1870, 2020),
+                     breaks = seq(1870, 2020, by = 20)) + 
   scale_color_viridis_d(option = "inferno") +
   theme_histbumbles()
   ggsave("./model_plots/agrichness_trend.eps",
@@ -203,6 +209,7 @@ ggplot() +
 midwestag.cropprop.df <- midwestag.bycrop.df %>%
   group_by(STATE, COUNTY, year) %>%
   summarise(prop_cropland = sum(prop_county))
+range(midwestag.bycrop.df$prop_county)
 midwestag.cropprop.df %>%
   group_by(year) %>%
   summarise(mean = mean(prop_cropland),
@@ -218,17 +225,17 @@ ggplot() +
   # geom_smooth(mapping = aes(x = year, 
   #                          y = n_crops,
   #                          color = STATE)) + 
-  # geom_point(mapping = aes(x = year, 
+  # geom_point(mapping = aes(x = year,
   #                          y = prop_cropland,
-  #                          color = STATE)) + 
+  #                          color = STATE)) +
   geom_smooth(mapping = aes(x = year, 
                            y = prop_cropland,
                            color = factor(STATE)),
               se = FALSE) + 
   xlab(label = "Year") +
   ylab(label = "Proportion agriculture") + 
-  scale_x_continuous(limits = c(1870, 2010),
-                     breaks = seq(1870, 2010, by = 20)) + 
+  scale_x_continuous(limits = c(1870, 2020),
+                     breaks = seq(1870, 2020, by = 20)) + 
   scale_color_viridis_d(option = "inferno") +
   theme_histbumbles()
 propag.plot
@@ -242,11 +249,12 @@ ggsave("./model_plots/propag_trend.eps",
 ## Mechanistic vars (pasture + pesticides)
 ```{r}
 midwestag.othervars2.df <- midwestag.othervars.df %>%
-  right_join(midwest.countyarea.df, ###CHANGE THIS TO LEFT JOIN 
+  left_join(midwestag.countysize.df, ###CHANGE THIS TO LEFT JOIN 
             by = c("state_name" = "state",
                    "county_name" = "county")) %>%
-  mutate(prop_pasture = pastureac / area_acres_2000,
-         prop_pest = pestac / area_acres_2000) %>% 
+  mutate(prop_pasture = pastureac / area_acres,
+         prop_pest = pestac / area_acres,
+         prop_cc = covercropac / area_acres) %>% 
   filter(!county_name %in% c("Wisconsin", "Iowa", "Illinois", "Indiana", "Michigan", "Minnesota"))
 ```
 
@@ -592,6 +600,101 @@ ncrop.plot
 ggsave("./model_plots/richovertime.eps",
        ncrop.plot,
        width = 10)
+```
+
+## Plot `pastureac` over time
+```{r}
+no_classes = 8
+pcc_quantiles <- midwestag.othervars2.df %>%
+  filter(!county_name %in% c("Wisconsin", "Iowa", "Illinois", "Indiana", "Michigan", "Minnesota"))
+pcc_quantiles <- stats::quantile(pcc_quantiles$prop_cc, 
+                                 na.rm = TRUE, 
+                                 type = 6,
+                                 probs = seq(0, 1, length.out = no_classes + 1))
+pcc_quantiles
+pcc_labels <- c("0-0.0004", 
+                "0.0005-0.0006", 
+                "0.0007-0.004", 
+                "0.005-0.007", 
+                "0.008-0.012", 
+                "0.013-0.022", 
+                "0.023-0.037", 
+                "0.038-0.183")
+
+
+midwestag.othervars2.df$pcc_brks <- cut(midwestag.othervars2.df$prop_cc, 
+                                          breaks = pcc_quantiles, 
+                                          include.lowest = TRUE,
+                                          labels = pcc_labels)
+pcc_breaks_scale <- levels(midwestag.othervars2.df$pcc_brks)
+
+propcc.plot <- midwestag.othervars2.df %>%
+  mutate(full_state = abbr2state(state_name)) %>%
+  left_join(us.county.midwest,
+            by = c("county_name" = "CNTY_NAME",
+                   "full_state" = "region")) %>%
+  filter(year %in% c(1982, 1992, 2002, 2012)) %>%
+  ggplot() + 
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = pcc_brks)) +
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y =lat,
+                             group = group),
+               fill = "transparent",
+               color = "#3A3A39",
+               size = 0.25) +
+  scale_fill_manual(values = rev(viridis::inferno(8, direction = -1)),
+                    breaks = rev(pcc_breaks_scale),
+                    name = "Proportion county in cover crop",
+                    drop = FALSE,
+                    labels = rev(pcc_breaks_scale)) +
+  # scale_fill_gradient(low = "#FFFFFF",
+  #                     high = "#F9A242",
+  #                     na.value = "#FFFFFF",
+  #                     name = "Acres of Pasture") +
+  coord_map("stereographic") + 
+  facet_wrap(~ year,
+             ncol = 6) +
+  theme_void()
+propcc.plot
+ggsave("./model_plots/prop_cc.eps",
+       propcc.plot,
+       width = 10)
+
+midwestag.othervars2.df %>%
+  filter(year != 1992) %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  geom_smooth(mapping = aes(x = year,
+                           y = prop_cc,
+                           color = state_name),
+              method = "loess",
+              span = 1,
+              se = FALSE) +
+  # geom_boxplot(outlier.shape = NA) +
+  # stat_summary(fun.data = "mean_cl_boot", geom = "pointrange",
+  #                    colour = "red", size = 0.5) + 
+  xlab(label = "Year") +
+  ylab(label = "Proportion county in cover crop") + 
+  scale_x_continuous(limits = c(1982, 2012),
+                     breaks = seq(1982, 2012, by = 10)) + 
+  scale_color_viridis_d(option = "inferno") + 
+  #scale_color_gradientn(colors = viridis::inferno(6)) + 
+  theme_histbumbles() +
+  ggsave("./model_plots/pcc_trend.eps",
+         height = 2,
+         width = 4)
+
+midwestag.othervars2.df %>%
+  filter(year > 1974) %>%
+  group_by(year) %>%
+  summarise(mean = mean(prop_cc, na.rm =TRUE),
+            se = sd(prop_cc, na.rm = TRUE) / sqrt(n()))
 ```
 
 ## Plot `pastureac` over time

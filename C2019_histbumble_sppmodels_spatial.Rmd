@@ -1,0 +1,550 @@
+## Spatial/OLS modeling function (by species)
+See which species show significant spatial autocorrelation and use LeGrange test to estimate best spatial model to use
+
+### Create spdf
+```{r}
+spatial.bumbles.glmvars.df
+spatial.corr.test.df <- spatial.bumbles.glmvars.df %>%
+  mutate(state_full = abbr2state(state)) %>%
+  left_join(countycode.df,
+            by = c("state_full" = "state",
+                   "county" = "county_name"))
+spatial.corr.test.spdf <- sp::merge(midwest.spdf,
+                                  spatial.corr.test.df,
+                                  by = "GID_2",
+                                  duplicateGeoms = TRUE)
+
+table(spatial.corr.test.spdf@data$species)
+
+# Filter for study species in 2012 only
+spatial.corr.test2012.spdf <- spatial.corr.test.spdf %>%
+  filter(bin_ag == 2012) %>%
+  filter(species %in% species)
+```
+
+### Find ag census year for each specices with most the records (counties)
+```{r}
+spatial.corr.test.df %>%
+  group_by(species, bin_ag) %>%
+  summarise(n_counties = n()) %>%
+  filter(n_counties == max(n_counties),
+         !species %in% c("Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis"))
+```
+
+### Test for spatial autocorrelation 
+```{r}
+spatial.autocorr.test <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species)) %>%
+    filter(!is.na(prop_cropland))
+  spp.test.yr.df <- spatial.corr.test.df %>%
+    group_by(species, bin_ag) %>%
+    summarise(n_counties = n()) %>%
+    filter(n_counties == max(n_counties),
+           !species %in% c("Bombus ashtoni",
+                           "Bombus fraternus",
+                           "Bombus variabilis"))
+  species <- c("Bombus affinis",
+               "Bombus auricomus",
+               "Bombus bimaculatus",
+               "Bombus borealis",
+               "Bombus citrinus",
+               "Bombus fervidus",
+               "Bombus griseocollis",
+               "Bombus impatiens",
+               "Bombus pensylvanicus",
+               "Bombus rufocinctus",
+               "Bombus ternarius",
+               "Bombus terricola",
+               "Bombus vagans")
+  iter <- 0
+  for (i in species) {
+    iter <- iter + 1
+    bin_ag_max <- spp.test.yr.df$bin_ag[spp.test.yr.df$species == i]
+    model.spdf <- analysis.spdf %>%
+      filter(species == i) %>%
+      filter(bin_ag == bin_ag_max)
+    spdf.list[[iter]] <- model.spdf
+  }
+  names(spdf.list) <- species
+  assign("spatial.autocorr.spdf.list",
+         spdf.list,
+         envir = .GlobalEnv)
+  
+  listnumber = 0
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  for (i in spdf.list) {
+    listnumber <- listnumber + 1
+    # OLS Model
+    glm.model <- glm(rel_abun ~ n_crops + prop_cropland,
+                     data = i@data,
+                     weights = i@data$bin_ag_abundance,
+                     na.action = na.exclude)
+    glm.df <- tidy(glm.model) %>%
+      mutate(model.type = "GLM",
+             species = i@data$species[1],
+             time = i@data$bin_ag[1],
+             sample.size = nrow(i@data),
+             moran.pvalue = NA) %>%
+      dplyr::select(species, time, sample.size, model.type, moran.pvalue, everything())
+    modeloutput.list[[listnumber]] <- glm.model
+    # print(paste("n residuals:", length(resid(glm.model)), sep = " "))
+    # Create spatial weights matrix
+    neighbors <- poly2nb(i,
+                         queen = TRUE)
+    # print(paste("n neighbors", length(neighbors), sep = " "))
+    weights <- nb2listw(neighbors,
+                        # style = "W",
+                        zero.policy = TRUE)
+    moran.test <- lm.morantest(glm.model,
+                               weights,
+                               alternative = "two.sided",
+                               zero.policy = TRUE)
+    moran.pvalue <- moran.test$p.value[1, 1]
+    glm.df$moran.pvalue = moran.pvalue
+    modelresults.list[[listnumber]] <- glm.df
+  }
+  spatial.corr.df <- bind_rows(modelresults.list)
+}
+
+spatial.corr.test.df <- spatial.autocorr.test(spatial.corr.test.spdf)
+```
+
+## Spatial models function: 1870-2018
+```{r}
+spatial.corr.models <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species))
+  spatial.test.list <- list()
+  spdf.list <- list()
+  species <- c("Bombus affinis",
+               "Bombus griseocollis",
+               "Bombus impatiens",
+               "Bombus ternarius")
+  for (i in species) {
+    model.spdf <- analysis.spdf %>%
+      filter(species == i) %>%
+      filter(!is.na(prop_cropland))
+    spdf.list[[i]] <- model.spdf
+    # assign("test.list",
+    #        spdf.list,
+    #        envir = .GlobalEnv)
+  }
+  listnumber <- 0
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  sma.results.list <- list()
+  sma.models.list <- list()
+  for (i in spdf.list) {
+    listnumber <- listnumber + 1
+    glm.model <- glm(rel_abun ~ 
+                       n_crops + 
+                       prop_cropland + 
+                       bin_ag,
+                     data = i@data,
+                     weights = i@data$bin_ag_abundance,
+                     family = binomial(link = "logit"),
+                     na.action = na.exclude)
+    glm.df <- tidy(glm.model) %>%
+      mutate(model.type = "glm",
+             species = i@data$species[1],
+             obsv = nrow(i@data)) %>%
+      dplyr::select(species, model.type, obsv, everything())
+    # residuals(ols.model)
+    modeloutput.list[[listnumber]] <- glm.model
+    weights.queen.list <- poly2nb(i,
+                                  queen = TRUE)
+    # print(length(weights.queen.list))
+    # print(length(ols.model$residuals))
+    # acf(residuals(ols.model))
+    weights <- nb2listw(weights.queen.list,
+                        style = "W",
+                        zero.policy = TRUE)
+    # plot(weights, coordinates(i))
+    moran.test <- lm.morantest(glm.model,
+                               weights,
+                               alternative = "two.sided",
+                               zero.policy = TRUE)
+    moran.pvalue <- moran.test$p.value[1, 1]
+    # print(moran.test)
+    glm.df <- glm.df %>%
+      mutate(moran_pvalue = moran.test$p.value)
+    modelresults.list[[listnumber]] <- glm.df
+    fit.sma <- errorsarlm(rel_abun ~ 
+                            scale(n_crops) + 
+                            scale(prop_cropland) + 
+                            scale(bin_ag),
+                          data = i,
+                          weights = bin_ag_abundance,
+                          listw = weights,
+                          zero.policy = TRUE)
+    sma.models.list[[listnumber]] <- fit.sma
+    sma.model.df <- tibble(term = c("(Intercept)",
+                                    "n_crops",
+                                    "prop_cropland",
+                                    "bin_ag"),
+                           estimate = (summary(fit.sma)$Coef[, 1]),
+                           std.error = (summary(fit.sma)$Coef[, 2]),
+                           statistic = (summary(fit.sma)$Coef[, 3]),
+                           p.value = (summary(fit.sma)$Coef[, 4])) %>%
+      mutate(model.type = "spatial.error",
+             species = i@data$species[1],
+             sample.size = nrow(i@data)) %>%
+      mutate(moran_pvalue = moran.test$p.value) %>%
+      left_join(as_tibble(confint(fit.sma)) %>%
+                  mutate(term = c("lamda",
+                                  "(Intercept)",
+                                  "n_crops",
+                                  "prop_cropland",
+                                  "bin_ag")) %>%
+                  dplyr::select(term, lower.ci = `2.5 %`, upper.ci = `97.5 %`),
+                by = c("term" = "term")) %>%
+      dplyr::select(species, 
+                    model.type, 
+                    sample.size, 
+                    moran_pvalue, 
+                    term, 
+                    estimate, 
+                    lower.ci, 
+                    upper.ci, 
+                    z.stat = statistic,
+                    p.value)
+    print(sma.model.df)
+    sma.results.list[[listnumber]] <- sma.model.df
+  }
+  glm.results.df <- bind_rows(modelresults.list)
+  sma.results.df <- bind_rows(sma.results.list)
+  assign("glm.spatialauto.df",
+         glm.results.df,
+         envir = .GlobalEnv)
+  assign("sma.spatialauto.df",
+         sma.results.df,
+         envir = .GlobalEnv)
+  assign("sma.models.list",
+         sma.models.list,
+         envir = .GlobalEnv)
+}
+```
+
+### Run for 1870-2018
+```{r}
+spatial.corr.models(spatial.corr.test.spdf)
+sma.spatialauto.df
+glm.spatialauto.df
+```
+
+### Combine spatial models with GLMs
+```{r}
+# Coef's from glms.df already scaled.
+models.1870.2018.df <- glms.df %>%
+  filter(!species %in% c("Bombus affinis",
+                         "Bombus griseocollis",
+                         "Bombus impatiens",
+                         "Bombus ternarius",
+                         "Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  mutate(model.type = "GLM",
+         moran_pvalue = NA) %>%
+  bind_rows(sma.spatialauto.df) %>%
+  dplyr::select(species, 
+                model.type, 
+                sample.size, 
+                moran_pvalue, 
+                term, 
+                estimate, 
+                lower.ci, 
+                upper.ci, 
+                z.stat,
+                p.value) %>%
+  mutate(p.value = ifelse(p.value < 0.001,
+                          "< 0.001",
+                          round(p.value,
+                                digits = 3)),
+         estimate = round(estimate,
+                          digits = 3),
+         lower.ci = round(lower.ci,
+                          digits = 4),
+         upper.ci = round(upper.ci,
+                          digits = 4))
+models.1870.2018.df <- models.1870.2018.df %>%
+  left_join(models.1870.2018.df %>%
+              filter(term == "bin_ag") %>%
+              mutate(status = case_when(estimate > 0 & p.value < 0.05 ~ "increase",
+                                        estimate < 0 & p.value < 0.05 ~ "decrease",
+                                        p.value > 0.05 ~ "stable"))%>%
+              dplyr::select(species, status),
+            by = "species") %>%
+    write_csv("./model_output/sppglm_1870_2018.csv")
+```
+### Plot coefficients
+```{r}
+coef.1870.2018.plot <- models.1870.2018.df %>%
+  filter(term != "(Intercept)") %>%
+  group_by(term) %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species, levels = species)) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = lower.ci,
+                                ymax = upper.ci),
+                  color = "black",
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = row_order,
+                           y = estimate,
+                           color = status),
+             size = 8) +
+  scale_color_manual(values = c("#E8C913", 
+                                "#000000", 
+                                "#E5E5E5"),
+                     labels = c("Decreasing",
+                                "Increasing",
+                                "Stable"),
+                     name = "Species status") +
+  facet_wrap(~term) +
+  theme_histbumbles() +
+  theme(legend.position = "none") +
+  coord_flip()
+  ggsave("./model_plots/coefs/coef_1870_2018.eps",
+       coef.1870.2018.plot,
+       height = 4)
+```
+
+## Spatial models function: 1982-2018
+### Create spdf
+```{r}
+spatial.corr.test.1982.df <- spatial.bumbles.glmvars2.df %>%
+  mutate(state_full = abbr2state(state)) %>%
+  left_join(countycode.df,
+            by = c("state_full" = "state",
+                   "county" = "county_name"))
+spatial.corr.test.1982.spdf <- sp::merge(midwest.spdf,
+                                  spatial.corr.test.1982.df,
+                                  by = "GID_2",
+                                  duplicateGeoms = TRUE)
+```
+
+```{r}
+spatial.corr.1982.models <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species))
+  spatial.test.list <- list()
+  spdf.list <- list()
+  species <- c("Bombus affinis",
+               "Bombus griseocollis",
+               "Bombus impatiens")
+  for (i in species) {
+    model.spdf <- analysis.spdf %>%
+      filter(species == i) %>%
+      filter(!is.na(prop_cc))
+    spdf.list[[i]] <- model.spdf
+    # assign("test.list",
+    #        spdf.list,
+    #        envir = .GlobalEnv)
+  }
+  listnumber <- 0
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  sma.results.list <- list()
+  sma.models.list <- list()
+  for (i in spdf.list) {
+    listnumber <- listnumber + 1
+    glm.model <- glm(rel_abun ~ 
+                       n_crops + 
+                       prop_pasture + 
+                       prop_pest + 
+                       prop_cc + 
+                       bin_ag,
+                     data = i@data,
+                     weights = i@data$bin_ag_abundance,
+                     family = binomial(link = "logit"),
+                     na.action = na.exclude)
+    glm.df <- tidy(glm.model) %>%
+      mutate(model.type = "glm",
+             species = i@data$species[1],
+             obsv = nrow(i@data)) %>%
+      dplyr::select(species, model.type, obsv, everything())
+    modeloutput.list[[listnumber]] <- glm.model
+    weights.queen.list <- poly2nb(i,
+                                  queen = TRUE)
+    # print(length(weights.queen.list))
+    # print(length(ols.model$residuals))
+    # acf(residuals(ols.model))
+    weights <- nb2listw(weights.queen.list,
+                        style = "W",
+                        zero.policy = TRUE)
+    # plot(weights, coordinates(i))
+    moran.test <- lm.morantest(glm.model,
+                               weights,
+                               alternative = "two.sided",
+                               zero.policy = TRUE)
+    moran.pvalue <- moran.test$p.value[1, 1]
+    # print(moran.test)
+    glm.df <- glm.df %>%
+      mutate(moran_pvalue = moran.test$p.value)
+    modelresults.list[[listnumber]] <- glm.df
+    fit.sma <- errorsarlm(rel_abun ~ 
+                            scale(n_crops) + 
+                            scale(prop_pasture) + 
+                            scale(prop_pest) + 
+                            scale(prop_cc) + 
+                            scale(bin_ag),
+                          data = i,
+                          weights = bin_ag_abundance,
+                          listw = weights,
+                          zero.policy = TRUE)
+    sma.models.list[[listnumber]] <- fit.sma
+    sma.model.df <- tibble(term = c("(Intercept)",
+                                    "n_crops",
+                                    "prop_pasture",
+                                    "prop_pest",
+                                    "prop_cc",
+                                    "bin_ag"),
+                           estimate = (summary(fit.sma)$Coef[, 1]),
+                           std.error = (summary(fit.sma)$Coef[, 2]),
+                           statistic = (summary(fit.sma)$Coef[, 3]),
+                           p.value = (summary(fit.sma)$Coef[, 4])) %>%
+      mutate(model.type = "spatial.error",
+             species = i@data$species[1],
+             sample.size = nrow(i@data)) %>%
+      mutate(moran_pvalue = moran.test$p.value) %>%
+      left_join(as_tibble(confint(fit.sma)) %>%
+                  mutate(term = c("lamda",
+                                  "(Intercept)",
+                                  "n_crops",
+                                  "prop_pasture",
+                                  "prop_pest",
+                                  "prop_cc",
+                                  "bin_ag")) %>%
+                  dplyr::select(term, lower.ci = `2.5 %`, upper.ci = `97.5 %`),
+                by = c("term" = "term")) %>%
+      dplyr::select(species, 
+                    model.type, 
+                    sample.size, 
+                    moran_pvalue, 
+                    term, 
+                    estimate, 
+                    lower.ci, 
+                    upper.ci, 
+                    z.stat = statistic,
+                    p.value)
+    print(sma.model.df)
+    sma.results.list[[listnumber]] <- sma.model.df
+  }
+  glm.results.df <- bind_rows(modelresults.list)
+  sma.results.df <- bind_rows(sma.results.list)
+  assign("glm.spatialauto.1982.df",
+         glm.results.df,
+         envir = .GlobalEnv)
+  assign("sma.spatialauto.1982.df",
+         sma.results.df,
+         envir = .GlobalEnv)
+  assign("sma.models.1982.list",
+         sma.models.list,
+         envir = .GlobalEnv)
+}
+```
+
+### Run for 1982-2018
+```{r}
+spatial.corr.1982.models(spatial.corr.test.1982.spdf)
+sma.spatialauto.1982.df
+```
+
+### Combine spatial models with GLMs
+```{r}
+# Coef's from glms.df already scaled.
+models.1982.2018.df <- glms2.df %>%
+  filter(!species %in% c("Bombus affinis",
+                         "Bombus griseocollis",
+                         "Bombus impatiens",
+                         "Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  mutate(model.type = "GLM",
+         moran_pvalue = NA) %>%
+  bind_rows(sma.spatialauto.1982.df %>%
+              filter(species != "Bombus ternarius")) %>%
+  dplyr::select(species, 
+                model.type, 
+                sample.size, 
+                moran_pvalue, 
+                term, 
+                estimate, 
+                lower.ci, 
+                upper.ci, 
+                z.stat,
+                p.value) %>%
+  mutate(p.value = ifelse(p.value < 0.001,
+                          "< 0.001",
+                          round(p.value,
+                                digits = 3)),
+         estimate = round(estimate,
+                          digits = 3),
+         lower.ci = round(lower.ci,
+                          digits = 4),
+         upper.ci = round(upper.ci,
+                          digits = 4))
+
+models.1982.2018.df <- models.1982.2018.df %>%
+  left_join(models.1982.2018.df %>%
+              filter(term == "bin_ag") %>%
+              mutate(status = case_when(estimate > 0 & p.value < 0.05 ~ "increase",
+                                        estimate < 0 & p.value < 0.05 ~ "decrease",
+                                        p.value > 0.05 ~ "stable"))%>%
+              dplyr::select(species, status),
+            by = "species") %>%
+    write_csv("./model_output/sppglm_1982_2018.csv")
+```
+
+### Plot coefficients
+```{r}
+coef.1982.2018.plot <- models.1982.2018.df %>%
+  filter(term != "(Intercept)") %>%
+  group_by(term) %>%
+  arrange(desc(estimate)) %>%
+  mutate(row_order = factor(species, levels = species)) %>%
+  ggplot() + 
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             color = "gray60",
+             size = 0.6) + 
+  geom_pointrange(mapping = aes(x = row_order,
+                                y = estimate,
+                                ymin = lower.ci,
+                                ymax = upper.ci),
+                  color = "black",
+                  size = 0.6) + 
+  geom_point(mapping = aes(x = row_order,
+                           y = estimate,
+                           color = status),
+             size = 8) +
+  scale_color_manual(values = c("#E8C913", 
+                                "#000000", 
+                                "#E5E5E5"),
+                     labels = c("Decreasing",
+                                "Increasing",
+                                "Stable"),
+                     name = "Species status") +
+  # scale_y_continuous(limits = c(-2, 10),
+  #                    breaks = seq(-2, 10, by = 1)) +
+  facet_wrap(~term,
+             nrow = 1,
+             scales = "free_x") +
+  theme_histbumbles() +
+  theme(legend.position = "none") +
+  coord_flip()
+ggsave("./model_plots/coefs/coef_1982_2018.eps",
+       coef.1982.2018.plot,
+       height = 4,
+       width = 10)
+```
+

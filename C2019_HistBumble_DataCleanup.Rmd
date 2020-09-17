@@ -29,10 +29,10 @@ library(openintro)
 # Clean up bumble bee data
 ## Load in raw data
 ```{r}
-gbif.bumbles.raw <- read_tsv("./2018_GBIF_Bumbles.csv",
+gbif.bumbles.raw <- read_tsv("./gbif_bumbles_2018.csv",
                              col_names = TRUE,
                             na = "NA")
-xerc.bumbles.raw <- read_csv("./BBW_US_5Sept2018.csv",
+xerc.bumbles.raw <- read_csv("./bbw_us_5sept2018.csv",
                              col_names = TRUE,
                              na = "NA")
 irc.bumbles.raw <- read_csv("./2016_WIRC_Bombus.csv",

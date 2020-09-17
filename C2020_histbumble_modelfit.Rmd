@@ -1,0 +1,85 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "GLM model fit and visualization"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# LOAD PACKAGES
+```{r}
+library(jtools)
+library(broom.mixed)
+library(interactions)
+library(janitor)
+library(tidyverse)
+```
+
+
+# LOAD DATA
+```{r}
+model.vars.df <- read_csv("./data/bumble_model_vars.csv")
+model.vars.red.df <- read_csv()
+model.vars.3yr.df <- read_csv()
+```
+
+# PREP DATA
+## Species data frames
+```{r}
+species.list <- as.list(unique(model.vars.df$species))
+species.df.list <- model.vars.df %>%
+  group_by(species) %>%
+  group_split()
+names(species.df.list) <- species.list
+```
+
+# MODELS
+## Full model
+### Fit
+```{r}
+fit.glms <- function(data) {
+  glm.df.list <- list()
+  glm.list <- list()
+  for (i in 1:length(species.list)) {
+    model.df <- data %>%
+      filter(species == species.list[[i]])
+    glm <- glm(rel_abun ~ prop_cropland*n_crops*bin_ag,
+               data = model.df,
+               weights = model.df$bin_ag_abundance,
+               na.action = na.exclude,
+               family = binomial(link = "logit")) 
+    glm.list[[i]] <- glm
+    glm.df <- tidy(glm) %>%
+      mutate(n_records = nrow(model.df),
+             species = unique(model.df$species),
+             r2 = broom::glance(summ(glm))$pseudo.r.squared.mcfadden) %>%
+      dplyr::select(species,
+                    term, 
+                    n_records,
+                    r2,
+                    everything())
+    glm.df.list[[i]] <- glm.df
+  }
+  names(glm.list) <- species.list
+  glms.df <- bind_rows(glm.df.list)
+
+  end.list <- list(full.model.list = glm.list, full.model.df = glms.df)
+  return(end.list)
+}
+
+full.models.list <- fit.glms(data = model.vars.df)
+```
+
+### Scale and extract
+## Filtered observations
+### Fit
+
+### Scale and extract
+
+## `bin_ag` window
+### Fit
+
+### Scale and extract

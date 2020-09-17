@@ -1,0 +1,854 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "GLM interaction visualization"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# 1870-2018 INTERACTIONS
+## Generate predictions
+```{r}
+predict.df.list <- list()
+for (i in 1:length(species.list)) {
+  predict <- predictorEffects(glm.output.list[[i]],
+                              se = list(compute = TRUE))
+  predict.df <- bind_rows(as_tibble(predict$n_crops) %>%
+                            rename(new_x = n_crops) %>%
+                            mutate(var = "n_crops"), 
+                          as_tibble(predict$prop_cropland) %>%
+                            rename(new_x = prop_cropland) %>%
+                            mutate(var = "prop_cropland"),
+                          as_tibble(predict$bin_ag) %>%
+                            rename(new_x = bin_ag) %>%
+                            mutate(var = "bin_ag")) %>%
+    mutate(species = species.list[[i]])
+  predict.df.list[[i]] <- predict.df
+}
+
+all.spp.predict.df <- bind_rows(predict.df.list)
+rm(predict.df.list)
+```
+
+## Plot interactions
+### Cross-sectional overlay
+#### Rare species
+```{r}
+all.spp.predict.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus affinis", "Bombus pensylvanicus", "Bombus terricola")) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 0.3) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  # scale_color_viridis_d(option = "inferno") +
+  # scale_fill_viridis_d(option = "inferno") +
+  scale_fill_manual(values = c("#080703",
+                               "#6B5B0C",
+                               "#D9BA1E",
+                               "#F7D528",
+                               "#FCE260")) +
+  scale_color_manual(values = c("#080703",
+                                "#6B5B0C",
+                                "#D9BA1E",
+                                "#F7D528",
+                                "#FCE260")) +
+  ylab("Predicted relative abundance") +
+  xlab("Proportion cropland") +
+  facet_wrap(species ~ prop_cropland,
+             ncol = 5) + 
+  theme_histbumbles()
+  theme(strip.text.x = element_blank()) +
+  ggsave("./model_plots/interactions/rare_spp.eps",
+         width = 5.5,
+         height = 3.5)
+```
+
+#### Common species
+```{r}
+all.spp.predict.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus bimaculatus", "Bombus griseocollis", "Bombus impatiens") &
+           n_crops %in% c(7, 11, 15)) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 0.3) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  # scale_color_viridis_d(option = "inferno") +
+  # scale_fill_viridis_d(option = "inferno") +
+  scale_fill_manual(values = c("#080703",
+                               "#6B5B0C",
+                               "#D9BA1E",
+                               "#F7D528",
+                               "#FCE260")) +
+  scale_color_manual(values = c("#080703",
+                                "#6B5B0C",
+                                "#D9BA1E",
+                                "#F7D528",
+                                "#FCE260")) +
+  ylab("Predicted relative abundance") +
+  xlab("Proportion cropland") +
+  facet_wrap(species ~ prop_cropland,
+             ncol = 5,
+             ) + 
+  theme_histbumbles() +
+  theme(strip.text.x = element_blank()) +
+  ggsave("./model_plots/interactions/common_spp.eps",
+         width = 5.5,
+         height = 3.5)
+```
+
+#### Other species
+```{r}
+all.spp.predict.df %>%
+  filter(var == "bin_ag" &
+         !species %in% c("Bombus bimaculatus", 
+                         "Bombus griseocollis", 
+                         "Bombus impatiens",
+                         "Bombus affinis",
+                         "Bombus pensylvanicus",
+                         "Bombus terricola",
+                         "Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis") &
+           n_crops %in% c(7, 11, 15) &
+           prop_cropland %in% c(0.2, 0.5, 0.9)) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 1) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  scale_fill_manual(values = c("#080703",
+                               "#6B5B0C",
+                               "#D9BA1E",
+                               "#F7D528",
+                               "#FCE260")) +
+  scale_color_manual(values = c("#080703",
+                                "#6B5B0C",
+                                "#D9BA1E",
+                                "#F7D528",
+                                "#FCE260")) +
+  ylab("Predicted relative abundance") +
+  xlab("Proportion cropland") +
+  facet_wrap(species ~ prop_cropland,
+             ncol = 3) + 
+  theme_histbumbles() +
+  ggsave("./model_plots/interactions/other_spp.eps",
+         width = 7,
+         height = 14)
+```
+
+#### Ag variables
+```{r}
+all.spp.predict.df %>%
+  filter(var == "bin_ag" & 
+           species %in% c("Bombus bimaculatus", "Bombus griseocollis", "Bombus impatiens")) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 0.2) +  
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          group = factor(n_crops),
+                          color = factor(n_crops))) +
+  facet_wrap(~species + prop_cropland,
+             ncol = 5) +
+  scale_color_viridis_d(option = "inferno") +
+  scale_fill_viridis_d(option = "inferno") +
+  theme_histbumbles() +
+  ggsave("./model_plots/interactions/other_spp.eps",
+         width = 7,
+         height = 14)
+```
+
+### AIC comparison (3-way interaction)
+```{r}
+AIC(glm.output.list[[1]]) # 2547.754 for model w/out 3-way interaction
+
+df2 <- tibble()
+for (i in 1:length(glm.output.list)) {
+  AIC <- AIC(glm.output.list[[i]])
+  # print(AIC)
+  df2 <- rbind(df2, AIC) %>%
+    rename(aic.2way = 1)
+}
+df2 <- df2 %>%
+  mutate(species = unique(spatial.bumbles.glmvars.df$species))
+
+df3 <- tibble()
+for (i in 1:length(glm.output.list)) {
+  AIC <- AIC(glm.output.list[[i]])
+  # print(AIC)
+  df3 <- rbind(df3, AIC) %>%
+    rename(aic.3way = 1)
+}
+df3 <- df3 %>%
+  mutate(species = unique(spatial.bumbles.glmvars.df$species))
+
+df2 %>%
+  left_join(df3, by = "species") %>%
+  mutate(delta = aic.3way - aic.2way)
+```
+
+### R-squared
+```{r}
+model.rsquared <- tibble()
+for (i in 1:length(glm.output.list)) {
+  r2 <- broom::glance(summ(glm.output.list[[i]]))$pseudo.r.squared.mcfadden
+  model.rsquared <- rbind(model.rsquared, r2) %>%
+    rename(pseudo.r2 = 1)
+}
+model.rsquared$species <- unique(spatial.bumbles.glmvars.df$species)
+```
+
+### Surface plots
+#### Common species
+```{r}
+
+```
+
+#### Rare species
+```{r}
+
+```
+
+
+# 1984-2018 INTERACTIONS
+## Generate predictions
+```{r}
+predict.df.list <- list()
+species.list <- as.list(unique(spatial.bumbles.glmvars2.df$species))
+for (i in 1:length(species.list)) {
+  predict <- predictorEffects(glm.output2.list[[i]],
+                              se = list(compute = TRUE))
+  predict.df <- bind_rows(as_tibble(predict$prop_pest) %>%
+                            rename(new_x = prop_pest) %>%
+                            mutate(var = "prop_pest"), 
+                          as_tibble(predict$prop_pasture) %>%
+                            rename(new_x = prop_pasture) %>%
+                            mutate(var = "prop_pasture"),
+                          as_tibble(predict$bin_ag) %>%
+                            rename(new_x = bin_ag) %>%
+                            mutate(var = "bin_ag")) %>%
+    mutate(species = species.list[[i]])
+  predict.df.list[[i]] <- predict.df
+}
+
+all.spp.predict2.df <- bind_rows(predict.df.list)
+rm(predict.df.list)
+rm(species.list)
+```
+
+## Plot iteractions
+### Rare species
+```{r}
+species.list <- as.list(unique(all.spp.predict2.df$species))
+for (i in 1:length(species.list)) {
+  plot <- all.spp.predict2.df %>%
+    filter(var == "bin_ag" &
+             species == species.list[[i]] &
+             n_crops %in% c(3.2, 9.8, 13) &
+             prop_pest %in% c(0.0, 0.2, 0.4) &
+             prop_pasture %in% c(0.00, 0.04, 0.08)) %>%
+    ggplot() +
+    geom_ribbon(mapping = aes(x = new_x,
+                              ymin = lower,
+                              ymax = upper,
+                              group = factor(n_crops),
+                              fill = factor(n_crops)),
+                alpha = 0.3) +
+    geom_line(mapping = aes(x = new_x,
+                            y = fit,
+                            color = factor(n_crops),
+                            group = factor(n_crops)),
+              size = 1.25) +
+    scale_color_viridis_d(option = "inferno") +
+    scale_fill_viridis_d(option = "inferno") +
+    ylab("Predicted relative abundance") +
+    xlab("Year") +
+    ggtitle(paste(species.list[[i]])) +
+    facet_wrap(~ prop_pest + prop_pasture,
+               ncol = 3) + 
+    theme_histbumbles()
+  print(plot)
+}
+
+all.spp.predict2.df %>%
+  filter(var == "bin_ag" &
+         # species %in% c("Bombus affinis", "Bombus pensylvanicus", "Bombus terricola") &
+           n_crops %in% c(3.2, 9.8, 13) &
+           prop_pest %in% c(0.0, 0.2, 0.4) &
+           prop_pasture %in% c(0.00, 0.04, 0.08)) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 0.3) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  scale_color_viridis_d(option = "inferno") +
+  scale_fill_viridis_d(option = "inferno") +
+  ylab("Predicted relative abundance") +
+  xlab("Year") +
+  facet_wrap(species ~ prop_pest + prop_pasture,
+             ncol = 9) + 
+  theme_histbumbles()
+  ggsave("./model_plots/interactions/rare1987_spp.eps",
+         width = 7,
+         height = 18)
+
+all.spp.predict2.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus affinis", "Bombus pensylvanicus", "Bombus terricola")) %>%
+  distinct(prop_pest)
+
+all.spp.predict2.df %>%
+  filter(var == "bin_ag") %>%
+  distinct(prop_pest)
+```
+
+### Common species
+```{r}
+all.spp.predict2.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus bimaculatus", "Bombus griseocollis", "Bombus impatiens") &
+           n_crops %in% c(3.2, 9.8, 13) &
+           prop_pest %in% c(0.059, 0.120, 0.230) &
+           prop_pasture %in% c(0.01, 0.03, 0.05)) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 1) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  scale_color_viridis_d(option = "inferno") +
+  scale_fill_viridis_d(option = "inferno") +
+  ylab("Predicted relative abundance") +
+  xlab("Year") +
+  facet_wrap(species ~ prop_pest + prop_pasture,
+             ncol = 3) + 
+  theme_histbumbles() +
+  ggsave("./model_plots/interactions/common1987_spp.eps",
+         width = 7,
+         height = 18)
+
+all.spp.predict2.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus affinis", "Bombus pensylvanicus", "Bombus terricola")) %>%
+  distinct(n_crops)
+```
+
+# FODDER
+## Extract yearly coefficient estimates
+For each species, extract coefficient of rel_abun ~ prop_cropland and rel_abun ~ n_crops for each year.
+```{r}
+species.list <- as.list(unique(spatial.bumbles.glmvars.df$species))
+bin.ag.list <- as.list(unique(spatial.bumbles.glmvars.df$bin_ag))
+glm.list <- list()
+df.list <- list()
+for (i in species.list) {
+  for(j in bin.ag.list) {
+    model.df <- spatial.bumbles.glmvars.df %>%
+      filter(species == i) %>%
+      filter(bin_ag == j) %>%
+      filter(!is.na(species)) %>%
+      filter(!is.na(prop_cropland))
+    model.df.list[[j]]
+    glm.model <- glm(rel_abun ~
+                       scale(n_crops) + 
+                       scale(prop_cropland),
+                       # avgfarm + 
+                       # cloverac + 
+                       # pastureac + 
+                     data = model.df,
+                     weights = model.df$bin_ag_abundance,
+                     na.action = na.exclude,
+                     family = binomial(link = "logit"))
+    glm.df <- tidy(glm.model) %>%
+      mutate(n_records = nrow(glm.model$model)) %>%
+      dplyr::select(term, 
+                    n_records, 
+                    everything())
+    # glmqq.plot <- qqPlot(residuals(glm.model))
+    # resid.plot <- plot(glm.model)
+    # glm.list[[i]] <- glm.model
+    df.list[[i]] <- glm.df
+  }
+}
+
+test.df <- bind_rows(df.list, .id = "species")
+```
+
+## County-level rate of change
+### Exploratory plot
+```{r}
+midwestag.vars.df %>%
+  ggplot() + 
+  geom_smooth(mapping = aes(x = year,
+                            y = n_crops,
+                            group = county,
+                            color = county),
+              method = "glm",
+              se = FALSE) + 
+  theme_histbumbles() +
+  theme(legend.position = "none")
+
+cty.list <- as.list(unique(midwestag.vars.df$county))
+cty.ncrop.df.list <- list()
+cty.propc.df.list <- list()
+
+for (i in cty.list) {
+  model.df <- midwestag.vars.df %>%
+    filter(county == i)
+  model.lm <- lm(n_crops ~ year,
+                 data = model.df)
+  model.df <- tidy(model.lm)
+  cty.ncrop.df.list[[i]] <- model.df
+}
+
+for (i in cty.list) {
+  model.df <- midwestag.vars.df %>%
+    filter(county == i)
+  model.lm <- lm(prop_cropland ~ year,
+                 data = model.df)
+  model.df <- tidy(model.lm)
+  cty.propc.df.list[[i]] <- model.df
+}
+
+cty.ncrop.df <- bind_rows(cty.ncrop.df.list, .id = "county")
+cty.propc.df <- bind_rows(cty.propc.df.list, .id = "county")
+
+# Rate of change of each county in number of crops
+cty.ncrop.slopes.df <- cty.ncrop.df %>%
+  filter(term == "year")
+
+# rate of change of each county in proportion cropland
+cty.propc.slopes.df <- cty.propc.df %>%
+  filter(term == "year")
+
+cty.propc.slopes.df %>%
+  ggplot() + 
+  geom_density(mapping = aes(x = estimate),
+               fill = "tomato",
+               alpha = 0.4) + 
+  theme_histbumbles()
+
+midwestag.vars.df %>%
+  filter(county == "Adams") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = year,
+                           y = prop_cropland,
+                           color = state)) + 
+  geom_smooth(mapping = aes(x = year,
+                            y = prop_cropland,
+                            group = state),
+              method = "lm") +
+  theme_histbumbles()
+
+
+cty.bumble.roc.list <- spatial.bumbles.ra.df %>%
+  group_by(species, county, state) %>%
+  filter(n() > 5) %>%
+  group_split()
+
+cty.bumble.raslope.list <- list()
+listnumber <- 0
+for (i in cty.bumble.roc.list) {
+  listnumber <- listnumber + 1
+  model.lm <- lm(rel_abun ~ bin_ag,
+                 data = i)
+  model.df <- tidy(model.lm) %>%
+    mutate(species = i$species[1],
+           county = i$county[1])
+  cty.bumble.raslope.list[[listnumber]] <- model.df
+}
+
+cty.bumble.raslope.df <- bind_rows(cty.bumble.raslope.list) %>%
+  dplyr::select(species, county, everything()) %>%
+  filter(term == "bin_ag")
+
+cty.bumble.ag.delta.df <- cty.bumble.raslope.df %>%
+  left_join(cty.propc.slopes.df %>%
+              dplyr::select(county,
+                            propc.slope = estimate,
+                            propc.err = std.error),
+            by = "county") %>%
+  left_join(cty.ncrop.slopes.df %>%
+              dplyr::select(county, 
+                            ncrop.slope = estimate,
+                            ncrop.err = std.error),
+            by = "county")
+
+cty.bumble.ag.delta.df %>%
+  pivot_longer(cols = c(propc.slope, ncrop.slope),
+               names_to = "ag.var",
+               values_to = "coef.est") %>%
+  ggplot() +
+  geom_vline(mapping = aes(xintercept = 0),
+             color = "black",
+             linetype = "dashed") +
+  geom_hline(mapping = aes(yintercept = 0),
+             color = "black",
+             linetype = "dashed") +
+  geom_point(mapping = aes(x = coef.est,
+                           y = estimate,
+                           color = species),
+             size = 4) +
+  geom_smooth(mapping = aes(x = coef.est,
+                            y = estimate,
+                            group = species,
+                            color = species),
+              method = "lm",
+              se = FALSE,
+              size = 2) + 
+  scale_color_viridis_d(option = "inferno") +
+  facet_wrap(~ag.var, scales = "free") +
+  theme_histbumbles()
+```
+
+```{r}
+all.spp.predict.df %>%
+  filter(var == "n_crops" & 
+           species %in% c("Bombus affinis", "Bombus pensylvanicus", "Bombus terricola")) %>%
+  group_by(prop_cropland, bin_ag, new_x, species) %>%
+  slice(1)
+  ggplot() +
+  # geom_ribbon(mapping = aes(x = new_x,
+  #                           ymin = lower,
+  #                           ymax = upper,
+  #                           group = factor(n_crops),
+  #                           fill = factor(n_crops)),
+  #             alpha = 0.2) +  
+  geom_point(mapping = aes(x = prop_cropland,
+                          y = n_crops,
+                          group = factor(new_x),
+                          color = factor(new_x))) +
+  # geom_line(mapping = aes(x = new_x,
+  #                         y = n_crops,
+  #                         group = factor(bin_ag),
+  #                         color = factor(bin_ag))) +
+  facet_wrap(~species) +
+  scale_color_viridis_d(option = "inferno") +
+  scale_fill_viridis_d(option = "inferno") +
+  theme_histbumbles()
+```
+
+
+
+```{r}
+all.spp.predict.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus bimaculatus", "Bombus griseocollis", "Bombus impatiens")) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 1) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  # scale_color_viridis_d(option = "inferno") +
+  # scale_fill_viridis_d(option = "inferno") +
+  scale_fill_manual(values = c("#080703",
+                               "#6B5B0C",
+                               "#D9BA1E",
+                               "#F7D528",
+                               "#FCE260")) +
+  scale_color_manual(values = c("#080703",
+                                "#6B5B0C",
+                                "#D9BA1E",
+                                "#F7D528",
+                                "#FCE260")) +
+  ylab("Predicted relative abundance") +
+  xlab("Proportion cropland") +
+  facet_wrap(species ~ prop_cropland,
+             ncol = 5,
+             ) + 
+  theme_histbumbles() +
+  theme(strip.text.x = element_blank())
+
+all.spp.predict.df %>%
+  filter(var == "bin_ag" &
+         species %in% c("Bombus affinis", "Bombus pensylvanicus", "Bombus terricola")) %>%
+  ggplot() +
+  geom_ribbon(mapping = aes(x = new_x,
+                            ymin = lower,
+                            ymax = upper,
+                            group = factor(n_crops),
+                            fill = factor(n_crops)),
+              alpha = 1) +
+  geom_line(mapping = aes(x = new_x,
+                          y = fit,
+                          color = factor(n_crops),
+                          group = factor(n_crops)),
+            size = 1.25) +
+  # scale_color_viridis_d(option = "inferno") +
+  # scale_fill_viridis_d(option = "inferno") +
+  scale_fill_manual(values = c("#080703",
+                               "#6B5B0C",
+                               "#D9BA1E",
+                               "#F7D528",
+                               "#FCE260")) +
+  scale_color_manual(values = c("#080703",
+                                "#6B5B0C",
+                                "#D9BA1E",
+                                "#F7D528",
+                                "#FCE260")) +
+  ylab("Predicted relative abundance") +
+  xlab("Proportion cropland") +
+  facet_wrap(species ~ prop_cropland,
+             ncol = 5,
+             ) + 
+  theme_histbumbles() +
+  theme(strip.text.x = element_blank())
+```
+
+
+##Try out `visreg` package
+```{r}
+library(visreg)
+
+for (i in 1:length(glm.output.list)) {
+  print(names(glm.output.list[i]))
+  plot <- visreg2d(glm.output.list[[i]], 
+           "prop_cropland", 
+           "n_crops", 
+           scale = "response",
+           #main = names(glm.output.list[i]))
+           plot.type = "gg")
+  print(plot)
+}
+
+visreg2d(glm.output.list[[1]], 
+         "prop_cropland", 
+         "n_crops",
+         # cond = list(bin_ag = 1900),
+         scale = "response",
+         plot.type = "gg") +
+  geom_point(data = midwestag.vars.df %>%
+            filter(year == 1900),
+          mapping = aes(x = prop_cropland,
+                        y = n_crops)) +
+  ggtitle("B. impatiens: 1900")
+# visreg2d(glm.output.list[[1]], 
+#          "prop_cropland", 
+#          "n_crops",
+#          cond = list(bin_ag = 1950),
+#          scale = "response")
+# visreg2d(glm.output.list[[1]], 
+#          "prop_cropland", 
+#          "n_crops",
+#          cond = list(bin_ag = 1972),
+#          scale = "response")
+visreg2d(glm.output.list[[1]], 
+         "prop_cropland", 
+         "n_crops",
+         # cond = list(bin_ag = 2017),
+         scale = "response",
+         plot.type = "gg")  +
+  geom_point(data = midwestag.vars.df %>%
+            filter(year == 2017),
+          mapping = aes(x = prop_cropland,
+                        y = n_crops)) +
+  ggtitle("B. impatiens: 2017")
+
+```
+## New model framework? glmer
+```{r}
+species.list <- spatial.bumbles.glmvars.df %>%
+  distinct(species) %>%
+  filter(!species %in% c("Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  pull() %>%
+  as.list()
+glmer.df.list <- list()
+glmer.output.list <- list()
+for (i in 1:length(species.list)) {
+  model.df <- spatial.bumbles.glmvars.df %>%
+          filter(species == species.list[[i]])
+  glmer <- glmer(rel_abun ~ scale(prop_cropland)*scale(n_crops) + (1 | bin_ag),
+        data = model.df,
+        weights = bin_ag_abundance,
+        na.action = na.exclude,
+        family = binomial(link = "logit"),
+        control=glmerControl(optimizer="bobyqa",
+                                 optCtrl=list(maxfun=2e5))) 
+  glmer.output.list[[i]] <- glmer
+  glmer.df <- tidy(glmer) %>%
+      mutate(n_records = nrow(model.df),
+             species = species.list[[i]]) %>%
+      dplyr::select(species,
+                    term, 
+                    n_records, 
+                    everything())
+  print(glmer.df)
+  glmer.df.list[[i]] <- glmer.df
+}  
+names(glmer.output.list) <- species.list
+glmers.df <- bind_rows(glmer.df.list)
+
+visreg2d(glmer.output.list[['Bombus impatiens']], 
+         "prop_cropland", 
+         "n_crops",
+         # cond = list(bin_ag = 1900),
+         scale = "response",
+         plot.type = "gg")  +
+  geom_jitter(data = midwestag.vars.df %>%
+            filter(year == 1900),
+          mapping = aes(x = prop_cropland,
+                        y = n_crops)) +
+  ggtitle("B. terricola: Ag stats 1900")
+
+
+visreg2d(glmer.output.list[['Bombus impatiens']], 
+         "prop_cropland", 
+         "n_crops",
+         # cond = list(bin_ag = 2017),
+         scale = "response",
+         plot.type = "gg",
+         re.form = NULL,
+         print.cond = TRUE) +
+  geom_jitter(data = midwestag.vars.df %>%
+                # filter(species == "Bombus terricola") %>%
+                filter(year == 2017),
+          mapping = aes(x = prop_cropland,
+                        y = n_crops)) +
+  ggtitle("B. terricola: Ag stats 2017")
+
+for (i in 1:length(glmer.output.list)) {
+  visreg2d(glmer.output.list[[i]], 
+         "prop_cropland", 
+         "n_crops",
+         #cond = list(bin_ag = 2017),
+         scale = "response",
+         plot.type = "gg",
+         allow.new.levels = TRUE)
+}
+
+
+plot(predictorEffects(glm.test.list[['Bombus terricola']]), "bin_ag")
+
+
+```
+
+```{r}
+glm.df.list <- list()
+glm.aug.list <- list()
+glm.test.list <- list()
+for (i in 1:length(species.list)) {
+  model.df <- spatial.bumbles.glmvars.df %>%
+          filter(species == species.list[[i]])
+  glm <- glm(rel_abun ~ prop_cropland*n_crops*bin_ag,
+        data = model.df,
+        weights = model.df$bin_ag_abundance,
+        na.action = na.exclude,
+        family = binomial(link = "logit")) 
+  glm.test.list[[i]] <- glm
+  glm.model.df <- augment(glm, 
+                          newdata = model.df)
+  glm.df <- tidy(glm) %>%
+      mutate(n_records = nrow(model.df),
+             species = species.list[[i]]) %>%
+      dplyr::select(species,
+                    term, 
+                    n_records, 
+                    everything())
+  # print(glmer.df)
+  glm.df.list[[i]] <- glm.df
+  glm.aug.list[[i]] <- glm.model.df
+}  
+names(glm.test.list) <- species.list
+glms.test.df <- bind_rows(glm.df.list)
+glms.aug.df <- bind_rows(glm.aug.list)
+
+library(jtools)
+library(interactions)
+  
+
+species.df.list <- spatial.bumbles.glmvars.df %>%
+  filter(!is.na(rel_abun) &
+           !is.na(prop_cropland) &
+           !is.na(n_crops)) %>%
+  group_by(species) %>%
+  group_split()
+names(species.df.list) <- unique(spatial.bumbles.glmvars.df$species)
+
+n_crops*prop_cropland*bin_ag
+prop_cropland*n_crops*bin_ag
+
+glm <- glm(rel_abun ~ n_crops*prop_cropland*bin_ag,
+           data = species.df.list[['Bombus terricola']],
+           weights = bin_ag_abundance,
+           family = binomial(link = "logit"))
+
+
+           
+interact_plot(sma.models.list[[1]], 
+              pred = bin_ag, 
+              modx = n_crops, 
+              mod2 = prop_cropland, 
+              # mod2.values = c(0.2, 0.5, 0.8),
+              # modx.values = c(3, 7, 15),
+              interval = TRUE) +
+  theme_histbumbles()
+
+probe_interaction(glm, 
+              pred = bin_ag, 
+              modx = n_crops, 
+              mod2 = prop_cropland, 
+              interval = TRUE)
+plot(sim_slopes(glm, 
+              pred = bin_ag, 
+              modx = n_crops, 
+              mod2 = prop_cropland, 
+              interval = TRUE))
+library(rgl)
+visreg2d(glm, "prop_cropland", "n_crops", plot.type = "persp", scale = "response")
+visreg2d(glm, "prop_cropland", "n_crops", scale = "response")
+```
+

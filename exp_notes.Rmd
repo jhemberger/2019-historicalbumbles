@@ -236,7 +236,7 @@ __February 3, 2020:__
 Adjusted secondary model so that pasture and pesticides were standardized by county area.  Changed the results quite a bit.  Pasture universally beneficial, pest. universally detrimental except 3 increasing species.  Temporal trends mirror that of pest. trends - all but three species are in decline.  Will need to re-work a couple of MS sections. 
 
 __April 2, 2020:__
-Talked with Tim about modeling in the paper, and re-ran spatial autocorrelation tests.  Three species show significant spatial autocorrleation in 2012 (year with most spatial unites - counties).  Ran spatial error models for these species (results are identical), but at least we have peace of mind that we are accounting for spatial autocorrelation when it exists.  
+Talked with Tim about modeling in the paper, and re-ran spatial autocorrelation tests.  Three species show significant spatial autocorrleation in 2012 (year with most spatial units - counties).  Ran spatial error models for these species (results are identical), but at least we have peace of mind that we are accounting for spatial autocorrelation when it exists.  
 
 Will need to make new figures amnd tables and depict model difference in the figs.  Coef's are still comparable.  Ultimately, using spatial models will adjust the confidence interval and hypothesis test, not the parameters estimates.  
 

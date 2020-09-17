@@ -1,0 +1,581 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Species occurrence and risk maps"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# LOAD PACKAGES
+
+
+# LOAD DATA
+```{r}
+glm.output.list <- X
+midwestag.model.df <- read_csv("./data/midwestag_model.csv")
+```
+
+
+# DRAW MAPS
+## Agricultural metrics
+### Proportion ag
+```{r}
+midwestag.plot.df <- midwestag.df %>%
+  dplyr::select(STATE_NAME, CNTY_NAME, ag_stat_name, ag_stat_value, year) %>%
+  left_join(us.county.midwest,
+            by = c("CNTY_NAME" = "CNTY_NAME"))
+
+no_classes = 8
+pcrop_quantiles <- stats::quantile(midwestag.vars.df$prop_cropland, 
+                            na.rm = TRUE, 
+                            type = 6,
+                            probs = seq(0, 1, length.out = no_classes + 1))
+pcrop_quantiles
+pcrop_labels <- c("0-0.02", "0.02-0.11", "0.11-0.26", "0.26-0.38", "0.38-0.47", 
+                  "0.47-0.55", "0.55-0.66", "0.66-1.0")
+
+
+midwestag.vars.df$pcrop_brks <- cut(midwestag.vars.df$prop_cropland, 
+                                    breaks = pcrop_quantiles, 
+                                    include.lowest = TRUE,
+                                    labels = pcrop_labels)
+pcrop_brks_scale <- levels(midwestag.vars.df$pcrop_brks)
+
+propcrop.plot <- midwestag.vars.df %>%
+  mutate(full_state = abbr2state(state)) %>%
+  left_join(us.county.midwest,
+            by = c("county" = "CNTY_NAME",
+                   "full_state" = "region")) %>%
+  filter(year %in% c(1880, 1900, 1950, 1974, 2017)) %>%
+  ggplot() + 
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = pcrop_brks)) +
+  # geom_polygon(data = us.county.midwest,
+  #              mapping = aes(x = long,
+  #                            y =lat,
+  #                            group = group),
+  #              fill = "transparent") +
+  geom_polygon(data = state_df <- map_data("state") %>%
+                 filter(region %in% c("wisconsin", 
+                                      "minnesota", 
+                                      "michigan", 
+                                      "iowa", 
+                                      "illinois", 
+                                      "indiana")),
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               color = "#383838",
+               size = 1.25,
+               fill = NA) +
+  scale_fill_manual(values = cal_palette(name = "arbutus", n = 8, type = "continuous")) +
+  # scale_fill_manual(values = rev(viridis::inferno(8, direction = -1)),
+  #                   breaks = rev(pcrop_brks_scale),
+  #                   name = "Proportion cropland in county",
+  #                   drop = FALSE,
+  #                   labels = rev(pcrop_brks_scale)) +  
+  # scale_fill_gradient(low = "#FFFFFF",
+  #                     high = "#FCAC25",
+  #                     na.value = "#3A3A39",
+  #                     name = "Proportion cropland") +
+  coord_map("stereographic") + 
+  labs(title = "Cropland : Total County Area") + 
+  facet_wrap(~ year,
+             ncol = 6) +
+  theme_void()
+propcrop.plot
+ggsave("./model_plots/maps/propcrop.eps",
+       propcrop.plot,
+       width = 10)
+```
+
+### Number of crops
+```{r}
+no_classes = 8
+ncrop_quantiles <- stats::quantile(midwestag.vars.df$n_crops, 
+                            na.rm = TRUE, 
+                            type = 1,
+                            probs = seq(0, 1, length.out = no_classes))
+ncrop_quantiles
+ncrop_labels <- c("0-4", "5-8", "9-10", "11", "12", "13-14", "15-16")
+ncrop_labels <- c("0-8", "8-10", "10", "11", "12", "13", "14-16")
+
+
+midwestag.vars.df$ncrop_brks <- cut(midwestag.vars.df$n_crops, 
+                                    breaks = c(0, 4, 8, 10, 11, 12, 14, 16), 
+                                    include.lowest = TRUE,
+                                    labels = ncrop_labels)
+ncrop_brks_scale <- levels(midwestag.vars.df$ncrop_brks)
+
+
+even_quantiles <- stats::quantile(midwestag.vars.df$crop_evenness, 
+                            na.rm = TRUE, 
+                            type = 1,
+                            probs = seq(0, 1, length.out = no_classes))
+even_quantiles
+even_labels <- c("0.00-0.05", "0.05-0.20", "0.20-0.31", "0.31-0.37", "0.37-0.41", "0.41-0.45", "0.45-0.71")
+
+
+midwestag.vars.df$even_brks <- cut(midwestag.vars.df$crop_evenness, 
+                                    breaks = even_quantiles, 
+                                    include.lowest = TRUE,
+                                    labels = even_labels)
+even_brks_scale <- levels(midwestag.vars.df$even_brks)
+
+ncrop.plot <- midwestag.vars.df %>%
+  mutate(full_state = abbr2state(state)) %>%
+  left_join(us.county.midwest,
+            by = c("county" = "CNTY_NAME",
+                   "full_state" = "region")) %>%
+  filter(year %in% c(1880, 1900, 1950, 1974, 2017)) %>%
+  ggplot() + 
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = ncrop_brks)) +
+  geom_polygon(data = us.county.midwest,
+               mapping = aes(x = long,
+                             y =lat,
+                             group = group),
+               fill = "transparent",
+               color = "#3A3A39",
+               size = 0.25) +
+  geom_polygon(data = state_df <- map_data("state") %>%
+                 filter(region %in% c("wisconsin", 
+                                      "minnesota", 
+                                      "michigan", 
+                                      "iowa", 
+                                      "illinois", 
+                                      "indiana")),
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               color = "#383838",
+               size = 1.25,
+               fill = NA) +
+  scale_fill_manual(values = c("#976153", 
+                               "#B97968",
+                               "#B5907A",
+                               "#8AA789",
+                               "#A6BD6E",
+                               "#C3D185",
+                               "#DFE3CE")) +
+  # scale_fill_manual(values = rev(viridis::inferno(8, direction = -1)),
+  #                   breaks = rev(ncrop_brks_scale),
+  #                   name = "Number of crops grown",
+  #                   drop = FALSE,
+  #                   labels = rev(ncrop_brks_scale)) +
+  # scale_fill_gradient(low = "#FFFFFF",
+  #                     high = "#821E67",
+  #                     na.value = "#3A3A39",
+  #                     name = "Number of Crops") +
+  coord_map("stereographic") + 
+  facet_wrap(~ year,
+             ncol = 6) +
+  theme_void()
+ncrop.plot
+ggsave("./model_plots/maps/ncrops.eps",
+       ncrop.plot,
+       width = 10)
+```
+
+## Predicted species occurrence
+### Generate predictions
+```{r}
+pred.relabun <- function(model.list) {
+  pred.list <- list()
+  years.list <- list()
+  years <- unique(midwestag.model.df$year)
+  for (i in 1:length(model.list)) {
+    for(j in years) {
+      newdata.df <- midwestag.model.df %>%
+        filter(year == j) %>%
+        mutate(bin_ag = year)
+      predict <- predict_merMod(object = model.list[[i]],
+                             newdata = newdata.df,
+                             type = "response",
+                             na.action = na.pass,
+                             allow.new.levels = TRUE)
+      predict.df <- tibble(rel_abun = predict,
+                           species = names(glm.output.list[i]),
+                           county = newdata.df$county,
+                           state = newdata.df$state,
+                           year = j)
+      pred.list[[j]] <- predict.df
+    }
+    years.list[[i]] <- bind_rows(pred.list)
+  }
+  relabun_bycty.df <- bind_rows(years.list)
+  assign("relabun.bycty.glmer.df",
+         relabun_bycty.df,
+         envir = .GlobalEnv)
+}
+pred.relabun(glm.output_red.list)
+pred.relabun(glmer.output.list)
+
+
+relabun_bycty.df %>%
+  filter(species == "Bombus terricola" & state == "IA" & year == 1950)
+```
+
+### Map function
+```{r}
+library(cartography)
+library(rcartocolor)
+plot.predicted <- function() {
+  plot.species <- c("Bombus affinis",
+                    "Bombus auricomus",
+                    "Bombus bimaculatus",
+                    "Bombus borealis",
+                    "Bombus citrinus",
+                    "Bombus fervidus",
+                    "Bombus griseocollis",
+                    "Bombus impatiens",
+                    "Bombus pensylvanicus",
+                    "Bombus rufocinctus",
+                    "Bombus ternarius",
+                    "Bombus terricola",
+                    "Bombus vagans")
+  relabun.quantiles <- stats::quantile(x = relabun.bycty.glmer.df$rel_abun,
+                                       na.rm = TRUE,
+                                       type = 1,
+                                       probs = seq(0, 1, length.out = 8)) %>%
+    as.vector()
+  
+  prob.labels <- imap_chr(relabun.quantiles, function(., idx){
+    return(paste0(round(relabun.quantiles[idx], 3),
+                  "–",
+                  round(relabun.quantiles[idx + 1], 3)))
+  })
+  prob.labels <- prob.labels[1:length(prob.labels) - 1]
+  relabun.bycty.glmer.df$prob_brks <- cut(relabun.bycty.glmer.df$rel_abun,
+                                    breaks = relabun.quantiles,
+                                    include.lowest = TRUE,
+                                    labels = prob.labels)
+  prob_brks_scale <- levels(relabun.bycty.glmer.df$prob_brks)
+  bumblepred.df <- relabun.bycty.glmer.df
+  assign("bumblepred.df",
+         bumblepred.df,
+         envir = .GlobalEnv)
+  for(i in plot.species) {
+    plot <- relabun.bycty.glmer.df %>%
+      filter(year %in% c(1900, 1950, 2017)) %>%
+      filter(species == i) %>%
+      mutate(bin_ag = year) %>%
+      mutate(state_full = abbr2state(state)) %>%
+      full_join(ungroup(us.county.midwest),
+                by = c("county" = "CNTY_NAME",
+                       "state_full" = "region")) %>%
+      filter(!is.na(species)) %>%
+      ggplot() +
+      geom_polygon(mapping = aes(x = long,
+                                 y = lat,
+                                 group = group,
+                                 fill = prob_brks),
+                   size = 0) +
+      geom_polygon(data = state_df <- map_data("state") %>%
+                     filter(region %in% c("wisconsin", 
+                                          "minnesota", 
+                                          "michigan", 
+                                          "iowa", 
+                                          "illinois", 
+                                          "indiana")),
+                   mapping = aes(x = long,
+                                 y = lat,
+                                 group = group),
+                   color = "#383838",
+                   size = 1.25,
+                   fill = NA) +
+      # Plot occurrences to visualize "fit"
+      # geom_point(inherit.aes = FALSE,
+      #            data = spatial.bumbles.df %>%
+      #              filter(species == i) %>%
+      #              filter(bin_ag %in% c(1850, 1900, 1950, 1974, 2012)) %>%
+      #              group_by(bin_ag) %>%
+      #              sample_n(size = 50, replace = TRUE),
+      #            mapping = aes(x = dec_long,
+      #                          y = dec_lat),
+      #            shape = 21,
+      #            fill = "tomato",
+    #              color = "black",
+    #            size = 1) +
+    # Convex hull "range"
+    # geom_polygon(data = analysis.bumbles.df %>%
+    #                filter(species == i) %>%
+    #                slice(chull(dec_long, dec_lat)),
+    #              mapping = aes(x = dec_long,
+    #                            y = dec_lat),
+    #              color = "tomato",
+    #              fill = NA,
+    #              alpha = 1,
+    #              size = 0.75) +
+    coord_map("stereographic") +
+      labs(title = i) +
+      scale_fill_manual(values = paste(rev(carto_pal(n = 8, "Fall")), sep = ","),
+                        breaks = prob_brks_scale,
+                        name = "Probability of occurrence",
+                        drop = FALSE,
+                        labels = prob_brks_scale) +
+      # scale_fill_manual(values = rev(viridis::inferno(8, direction = 1)),
+      #                   breaks = rev(prob_brks_scale),
+      #                   name = "Probability of occurrence",
+      #                   drop = FALSE,
+      #                   labels = rev(prob_brks_scale)) +
+      # scale_fill_viridis_c(option = "inferno",
+      #                      direction = 1,
+      #                      ) +
+      facet_grid(~ bin_ag) + 
+      theme_void()
+    # ggsave(paste("./model_plots/predict_relabun/",
+    #              tolower(gsub(" ", "_", i)),
+    #              ".eps",
+    #              sep = ""),
+    #        width = 6)
+    print(plot)
+  }
+}
+
+relabun.bycty.glmer.df %>%
+  filter(species == "Bombus terricola" & 
+           year == 2017)
+```
+
+### Run function
+```{r}
+plot.predicted()
+```
+
+## Risk maps
+### Assign counties to risk
+#### Manual
+```{r}
+focal.species <- list("Bombus affinis",
+                      "Bombus bimaculatus",
+                      "Bombus griseocollis",
+                      "Bombus impatiens",
+                      "Bombus pensylvanicus",
+                      "Bombus terricola")
+midwestag.model.list <- list()
+for (i in 1:length(focal.species)) {
+  df <- midwestag.model.df %>%
+    dplyr::select(state, county, year, n_crops, prop_cropland) %>%
+    mutate(species = focal.species[[i]]) 
+  midwestag.model.list[[i]] <- df
+}
+midwestag.model.allspp.df <- bind_rows(midwestag.model.list) %>%
+  filter(year == 2017)
+rm(midwestag.model.list)
+
+test <- midwestag.model.allspp.df %>%
+  mutate(
+    cty.status = case_when(species == "Bombus affinis" & n_crops >= 11 ~ "low",
+                           species == "Bombus affinis" & n_crops <= 7 ~ "high",
+                           species == "Bombus pensylvanicus" & n_crops <= 7 & prop_cropland <= 0.3 ~ "low",
+                           species == "Bombus pensylvanicus" & n_crops <= 12 ~ "high",
+                           species == "Bombus terricola" & n_crops >= 11 & prop_cropland <= 0.3 ~ "low",
+                           species == "Bombus terricola" & n_crops < 11 & prop_cropland > 0.3 ~ "high",
+                           species == "Bombus bimaculatus" & n_crops >= 9 & prop_cropland >= 0.2 ~ "low",
+                           species == "Bombus bimaculatus" & prop_cropland < 0.2 ~ "moderate",
+                           species == "Bombus griseocollis" & n_crops <= 9 & prop_cropland >= 0.5 ~ "low",
+                           species == "Bombus griseocollis" & n_crops > 9 ~ "moderate",
+                           species == "Bombus impatiens" & n_crops >= 11 ~ "low",
+                           species == "Bombus impatiens" & n_crops <= 9 & prop_cropland > 0.5 ~ "moderate"))
+
+test %>%
+  mutate(state = abbr2state(state)) %>%
+  full_join(ungroup(us.county.midwest),
+            by = c("county" = "CNTY_NAME",
+                   "state" = "region")) %>%
+  ggplot() +
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = cty.status,
+                             color = cty.status),
+               size = 0) + 
+  scale_fill_viridis_d(na.value = "grey50", begin = 0.2, direction = -1) +
+  coord_map("stereographic") +
+  facet_wrap(~species) +
+  theme_void() + 
+  ggsave("./model_plots/predict_relabun/spp_risk.eps")
+```
+
+#### Use county trends in predicted RA
+```{r}
+relabun.analy.list <- relabun_bycty.df %>%
+  filter(!species %in% c("Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  group_by(species, state, county) %>%
+  group_split()
+
+ctylm.list <- list()
+for (i in 1:length(relabun.analy.list)) {
+  cty.lm <- lm(rel_abun ~ scale(year),
+               data = relabun.analy.list[[i]])
+  ctylm.df <- tidy(cty.lm) %>%
+    filter(term == "scale(year)") %>%
+    mutate(species = relabun.analy.list[[i]]$species[1],
+           state = relabun.analy.list[[i]]$state[1],
+           county = relabun.analy.list[[i]]$county[1]) %>%
+    select(species, state, county, term, estimate, std.error, p.value)
+  ctylm.list[[i]] <- ctylm.df
+}
+
+
+ctylm.df <- bind_rows(ctylm.list)
+rm(relabun.analy.list)
+rm(ctylm.list)
+```
+
+##### Assign risk using quantiles
+```{r}
+ctytrend.quantiles <- stats::quantile(x = ctylm.df$estimate,
+                                      na.rm = TRUE,
+                                      type = 1,
+                                      probs = seq(0, 1, length.out = 5)) %>%
+  as.vector()
+
+ctytrend.labels <- imap_chr(ctytrend.quantiles, function(., idx){
+  return(paste0(round(ctytrend.quantiles[idx], 3),
+                "–",
+                round(ctytrend.quantiles[idx + 1], 3)))
+})
+
+ctytrend.labels <- ctytrend.labels[1:length(ctytrend.labels) - 1]
+
+ctylm.df$risk_brks <- cut(ctylm.df$estimate,
+                          breaks = ctytrend.quantiles,
+                          include.lowest = TRUE,
+                          labels = ctytrend.labels)
+
+rm(ctytrend.quantiles)
+rm(ctytrend.labels)
+```
+
+### Map risk
+```{r}
+ctylm.df %>% 
+  mutate(state_full = abbr2state(state),
+         risk = case_when(risk_brks == "-0.348–-0.103" ~ "4",
+                          risk_brks == "-0.103–-0.031" ~ "3",
+                          risk_brks == "-0.031–0.017" ~ "2",
+                          risk_brks == "0.017–0.185" ~ "1"),
+         risk =  factor(risk, levels = c("1", "2", "3", "4"))) %>%
+  full_join(ungroup(us.county.midwest),
+            by = c("county" = "CNTY_NAME",
+                   "state_full" = "region")) %>%
+  ggplot() + 
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group,
+                             fill = risk)) +
+  geom_polygon(data = state_df <- map_data("state") %>%
+                 filter(region %in% c("wisconsin", 
+                                      "minnesota", 
+                                      "michigan", 
+                                      "iowa", 
+                                      "illinois", 
+                                      "indiana")),
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               color = "#383838",
+               size = 1.25,
+               fill = NA) +
+  scale_fill_manual(values = c("#191716",
+                               "#49441A",
+                               "#B59718",
+                               "#EFD53C")) +
+  coord_map("stereographic") +
+  facet_wrap(~ species) +
+  theme_void()
+  ggsave("./model_plots/maps/risk_map.eps")
+```
+
+### Predicted species trend
+```{r}
+plot.species <- relabun_bycty.df %>%
+  filter(!species %in% c("Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  distinct(species) %>%
+  pull(species)
+
+for (i in plot.species) {
+  plot <- relabun_bycty.df %>%
+  filter(species == i) %>%
+  ggplot() + 
+  geom_jitter(mapping = aes(x = year,
+                            y = rel_abun),
+              # alpha = 0.01,
+              height = 0.02,
+              width = 5) +
+  geom_smooth(mapping = aes(x = year,
+                            y = rel_abun),
+              color = "tomato",
+              method = "gam") +
+  theme_histbumbles()
+  print(plot)
+  # ggsave(paste0("./model_plots/trends/modelavg_", i, ".eps"),
+  #        height = 2,
+  #        width = 3)
+}
+rm(plot.species)
+```
+
+
+## Key maps
+```{r}
+library(maps)
+
+us.map <- map("state",proj="conic",par=39.83,
+              fill = TRUE)
+
+study.map <- us.map[us.map$names] %in% c("wisconsin", 
+                                 "michigan", 
+                                 "minnesota", 
+                                 "illinois",
+                                 "indiana", 
+                                 "iowa")
+
+states %>%
+  ggplot() + 
+  geom_sf(data = states %>%
+            filter(ID %in% c("wisconsin", 
+                             "michigan", 
+                             "minnesota", 
+                             "illinois",
+                             "indiana", 
+                             "iowa")),
+          fill = "tomato") +
+  coord_sf(crs = "+proj=aea +lat_1=25 +lat_2=50 +lon_0=-100") + 
+  theme_void() +
+  ggsave("./model_plots/study_area.eps")
+
+state_df <- map_data("state")
+
+state_df %>%
+  filter(region %in% c("wisconsin", "minnesota", "michigan", "iowa", "illinois", "indiana")) %>%
+  ggplot() + 
+  geom_polygon(mapping = aes(x = long,
+                             y = lat,
+                             group = group)) + 
+  coord_map("stereographic") +
+  theme_void() + 
+  ggsave("./model_plots/study_states.eps")
+```
+
+```{r}
+devtools::install_github("an-bui/calecopal")
+library(calecopal)
+names(cal_palettes)
+
+cal_palette(name = "seagrass", n = 8, type = "continuous")
+```
+

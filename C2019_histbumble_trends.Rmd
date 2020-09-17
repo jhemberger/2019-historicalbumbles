@@ -370,9 +370,9 @@ rareest.15period.plot <- rareest.15period.df %>%
                   size = 0.8) +
   geom_smooth(mapping = aes(x = year,
                             y = qD),
-              method = "glm",
-              color = "black",
-              span = 0.75,
+              method = "gam",
+              color = "tomato",
+              span = 0.5,
               alpha = 1) + 
   geom_rug(data = spatial.bumbles.df %>%
              mutate(qD = 5),
@@ -387,7 +387,7 @@ rareest.15period.plot <- rareest.15period.df %>%
                      breaks = seq(5, 20, by = 3)) +
   ylab("Estimated species richness") + 
   xlab("Time Period") + 
-  theme_classic()
+  theme_histbumbles()
 ggsave("./model_plots/diversity_trends.eps",
        rareest.15period.plot,
        width = 5,
@@ -404,6 +404,11 @@ speciestrend.lm <- lm(qD ~ year,
 speciestrend.glm <- glm(qD ~ year,
                         data = rareest.15period.df,
                         family = Gamma(link = "inverse"))
+plot(gam::gam(qD ~ year,
+         data = rareest.15period.df %>%
+           filter(order == 0)))
+
+
 summary(speciestrend.glm)
 summary(speciestrend.lm)
 plot(speciestrend.lm)

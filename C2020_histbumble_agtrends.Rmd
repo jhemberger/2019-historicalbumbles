@@ -1,0 +1,145 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Ag intensity pattern exploration"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# EXPLORATION
+## Crop trends
+### Major crops
+```{r}
+midwestag.bycrop.df %>%
+  filter(crop_name %in% c("Corn", "Soybeans", "Hay (Grass + Legume)", "Wheat", "Oats")) %>%
+  ggplot() + 
+  geom_smooth(mapping = aes(x = year,
+                            y = prop_county),
+              color = "tomato") + 
+  facet_wrap(~crop_name,
+             scale = "fixed",
+             ncol = 5) + 
+  theme_histbumbles()
+```
+
+```{r}
+midwestag.bycrop.df %>%
+  group_by(year, crop_name) %>%
+  summarise(mean_prop_county = mean(prop_county, na.rm = TRUE)) %>%
+  filter(crop_name %in% c("Corn", "Hay (Grass + Legume)", "Wheat", "Soybeans", "Oats")) %>%
+  bind_rows(midwestag.bycrop.df %>%
+              group_by(year, crop_name) %>%
+              summarise(mean_prop_county = mean(prop_county, na.rm = TRUE)) %>%
+              arrange(mean_prop_county, 
+                      .by_group = TRUE) %>%
+              filter(!crop_name %in% c("Corn", "Hay (Grass + Legume)", "Wheat", "Soybeans", "Oats")) %>%
+              summarise(mean_prop_county = sum(mean_prop_county)) %>%
+              mutate(crop_name = "Other")) %>%
+  arrange(mean_prop_county, 
+          .by_group = TRUE) %>%
+  mutate(crop_factor = factor(crop_name, 
+                              levels = c(.$crop_name[.$year == 1900]))) %>%
+  ggplot() + 
+  geom_area(mapping = aes(x = year,
+                          y = mean_prop_county,
+                          fill = crop_factor,
+                          group = crop_factor)) + 
+  scale_fill_viridis_d(option = "inferno",
+                       direction = 1) +
+  theme_histbumbles() + 
+  ggsave("./model_plots/croparea.eps",
+         width = 5,
+         height = 2.5)
+```
+
+
+### Minor crops
+```{r}
+midwestag.bycrop.df %>%
+  filter(!crop_name %in% c("Corn", "Soybeans", "Hay (Grass + Legume)", "Wheat", "Oats")) %>%
+  ggplot() + 
+  geom_smooth(mapping = aes(x = year,
+                            y = prop_county),
+              color = "tomato") + 
+  facet_wrap(~crop_name,
+             scale = "fixed",
+             ncol = 5) + 
+  theme_histbumbles()
+```
+
+```{r}
+midwestag.bycrop.df %>%
+  group_by(COUNTY, year) %>%
+  summarise(sum_ag = sum(prop_county, na.rm = TRUE)) %>%
+  group_by(year) %>%
+  summarise(mean_total_ag = mean(sum_ag),
+            sd_total_ag = sd(sum_ag),
+            se_total_ag = sd_total_ag / sqrt(n())) %>%
+  ggplot() + 
+  geom_pointrange(mapping = aes(x = year,
+                                y = mean_total_ag,
+                                ymin = mean_total_ag - sd_total_ag,
+                                ymax = mean_total_ag + sd_total_ag)) +
+  theme_histbumbles()
+
+
+midwestag.bycrop.df %>%
+  group_by(COUNTY, year) %>%
+  summarise(sum_ag = sum(prop_county, na.rm = TRUE)) %>%
+  ungroup() %>%
+  summarise(n_total = n(),
+            n_above = sum(sum_ag > 0.7),
+            prop_above = n_above / n_total)
+```
+
+```{r}
+hist(midwestag.vars.df$prop_cropland)
+
+stats::quantile(x = midwestag.vars.df$prop_cropland,
+                na.rm = TRUE,
+                type = 1,
+                probs = seq(0, 1, length.out = 5))
+```
+
+# ANALYSIS
+## NMDS
+### Create community crop matrices
+```{r}
+crop.comm.matrix.list <- list()
+year.list <- as.list(unique(midwestag.bycrop.df$year))
+
+for (i in 1:length(year.list)) {
+  comm.matrix <- midwestag.bycrop.df %>%
+    filter(year == year.list[i]) %>%
+    dplyr::select(state = STATE, county = COUNTY, prop_county, crop) %>%
+    pivot_wider(names_from = crop, values_from = prop_county) %>%
+    rename_all(tolower) %>%
+    mutate(county = str_sub(county, end = -7))
+  crop.comm.matrix.list[[i]] <- comm.matrix
+}
+names(crop.comm.matrix.list) <- year.list
+```
+
+### Run NMMDS
+```{r}
+library(vegan)
+rowAny <- function(x) rowSums(x) > 0
+
+# 1860
+nmds.crop.1860 <- metaMDS(crop.comm.matrix.list[["1860"]] %>%
+                            dplyr::select(-c(state, county)) %>%
+                            filter(rowAny(across(where(is.numeric), ~ .x > 0))),
+                          k = 4,
+                          trymax = 500,
+                          trace = FALSE)
+
+stressplot(nmds.crop.1860)
+plot(nmds.crop.1860)
+ordiplot(nmds.crop.1860, type = "n")
+orditorp(nmds.crop.1860, display = "species", col = "red")
+
+```
+

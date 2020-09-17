@@ -11,7 +11,6 @@ output: html_notebook
 
 # Import libraries
 ```{r}
-library(tidyverse)
 library(maptools)
 library(maps)
 library(raster)
@@ -21,6 +20,7 @@ library(gganimate)
 library(transformr)
 library(cowplot)
 library(openintro)
+library(tidyverse)
 ```
 
 # Load in Mike's proportion ag data
@@ -156,11 +156,14 @@ ggplot() +
   ylab(label = "Number of crops grown") + 
   scale_x_continuous(limits = c(1870, 2020),
                      breaks = seq(1870, 2020, by = 20)) + 
+  scale_y_continuous(limits = c(5, 15),
+                     breaks = seq(5, 15, by = 3)) +
   scale_color_viridis_d(option = "inferno") +
-  theme_histbumbles()
+  theme_histbumbles() +
+  theme(legend.position = "none")
   ggsave("./model_plots/agrichness_trend.eps",
          plot = agrichness.plot,
-         height = 2,
+         height = 3,
          width = 4)
 agrichness.plot
 ```
@@ -237,12 +240,13 @@ ggplot() +
   scale_x_continuous(limits = c(1870, 2020),
                      breaks = seq(1870, 2020, by = 20)) + 
   scale_color_viridis_d(option = "inferno") +
-  theme_histbumbles()
+  theme_histbumbles() +
+  theme(legend.position = "none")
 propag.plot
 ggsave("./model_plots/propag_trend.eps",
        plot = propag.plot,
-       height = 2,
-       width = 4.3)
+       height = 3,
+       width = 4)
 ```
 
 
@@ -526,11 +530,12 @@ propcrop.plot <- midwestag.vars.df %>%
                fill = "transparent",
                color = "#3A3A39",
                size = 0.25) +
-  scale_fill_manual(values = rev(viridis::inferno(8, direction = -1)),
-                    breaks = rev(pcrop_brks_scale),
-                    name = "Proportion cropland in county",
-                    drop = FALSE,
-                    labels = rev(pcrop_brks_scale)) +  
+  scale_fill_manual(values = cal_palette(name = "arbutus", n = 8, type = "continuous")) +
+  # scale_fill_manual(values = rev(viridis::inferno(8, direction = -1)),
+  #                   breaks = rev(pcrop_brks_scale),
+  #                   name = "Proportion cropland in county",
+  #                   drop = FALSE,
+  #                   labels = rev(pcrop_brks_scale)) +  
   # scale_fill_gradient(low = "#FFFFFF",
   #                     high = "#FCAC25",
   #                     na.value = "#3A3A39",
@@ -544,6 +549,8 @@ propcrop.plot
 ggsave("./model_plots/propcrop_overtime.eps",
        propcrop.plot,
        width = 10)
+
+
 ```
 
 ## Plot `n_crops` over time
@@ -552,10 +559,10 @@ no_classes = 8
 ncrop_quantiles <- stats::quantile(midwestag.vars.df$n_crops, 
                             na.rm = TRUE, 
                             type = 1,
-                            probs = seq(0, 1, length.out = no_classes + 1))
+                            probs = seq(0, 1, length.out = no_classes))
 ncrop_quantiles
 ncrop_labels <- c("0-4", "5-8", "9-10", "11", "12", "13-14", "15-16")
-ncrop_labels <- c("2-8", "8-10", "11", "12", "13", "14", "15-16")
+ncrop_labels <- c("0-8", "8-10", "10", "11", "12", "13", "14-16")
 
 
 midwestag.vars.df$ncrop_brks <- cut(midwestag.vars.df$n_crops, 
@@ -564,6 +571,20 @@ midwestag.vars.df$ncrop_brks <- cut(midwestag.vars.df$n_crops,
                                     labels = ncrop_labels)
 ncrop_brks_scale <- levels(midwestag.vars.df$ncrop_brks)
 
+
+even_quantiles <- stats::quantile(midwestag.vars.df$crop_evenness, 
+                            na.rm = TRUE, 
+                            type = 1,
+                            probs = seq(0, 1, length.out = no_classes))
+even_quantiles
+even_labels <- c("0.00-0.05", "0.05-0.20", "0.20-0.31", "0.31-0.37", "0.37-0.41", "0.41-0.45", "0.45-0.71")
+
+
+midwestag.vars.df$even_brks <- cut(midwestag.vars.df$crop_evenness, 
+                                    breaks = even_quantiles, 
+                                    include.lowest = TRUE,
+                                    labels = even_labels)
+even_brks_scale <- levels(midwestag.vars.df$even_brks)
 
 ncrop.plot <- midwestag.vars.df %>%
   mutate(full_state = abbr2state(state)) %>%
@@ -852,7 +873,7 @@ ggplot() +
   scale_x_continuous(limits = c(1982, 2012),
                      breaks = seq(1982, 2012, by = 10)) + 
   scale_color_viridis_d(option = "inferno") + 
-  theme_histbumbles() + 
+  theme_histbumbles()
   ggsave("./model_plots/pestac_trend.eps",
          height = 2,
          width = 4)

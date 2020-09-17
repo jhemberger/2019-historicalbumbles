@@ -1,0 +1,279 @@
+---
+title: |
+  **The fate of bumble bees in the north-central United States is linked to historical patterns of agricultural intensification**
+author:
+- Jeremy Hemberger
+- Michael Crossley
+- Claudio Gratton
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    fig_caption: yes
+    keep_tex: yes
+    latex_engine: pdflatex
+  html_document:
+    df_print: paged
+fontfamily: mathpazo
+fontsize: 11pt
+geometry: margin = 1in
+header-includes:
+- \usepackage{setspace}\doublespacing
+- \usepackage[left]{lineno}
+- \linenumbers
+- \usepackage{dcolumn}
+- \usepackage{caption}
+- \usepackage{float}
+- \usepackage{afterpage}
+- \usepackage{siunitx}
+keywords: Agricultural intensification, Bumble bees, bee decline, agroecosystems
+bibliography: ./library.bib
+spacing: double
+abstract: |
+  The decline of North American bumble bees has been tentatively linked to changes in agricultural practices over the last century.  Researchers posit that a switch from the diverse and less intensive agricultural systems of the early 1900's to the largely monocultural, heavy-input systems of today has impacted both nesting habitat and floral resource availability with negative consequences for bumble bee populations and communities.  Despite several long-term analyses highlighting concerning population trends, no studies have yet explicitly linked metrics of agricultural intensification to bumble bee declines. Using an extensive long term set of both bumble bee records and US agricultural census records, we show that metrics of increasing agricultural intensity, specifically proportion cropland and a decrease in crop richness, are clearly associated with the decline of nearly half of bumble bee species in the north-central US. Additionally, we document positive species associations with crop richness and specific metrics such as proportion pasture even under areas of intensive cultivation, suggesting that bumble bee declines are linked to not just the extent of agriculture, but rather the practices implemented on the ground. In addition to spurring future avenues for controlled, manipulative experiments, our results suggest that changes to our agricultural practice and policies are required in order to limit additional declines of Midwestern bumble bees.
+---
+\captionsetup[table]{labelformat=empty}
+
+# Introduction
+Extensive range contractions [@Kerr2015] and possible local extinctions [@Rasmont2012] of a number of bee species has sounded an alarm among conservationists across the world [@Steffan-Dewenter2005c; @Tylianakis2013a]. Of bee population trends that have been well documented, bumble bees (Apidae: Bombus) are perhaps the most well-studied with reports of many species declining across Europe and North/South America [@Biesmeijer2006; @Colla2008; @Grixti2009; @Cameron2011; @Bartomeus2013; @Morales2013; @Wood2019]. Owing to their importance as pollinators in both commercial crops [@Klein2007g] and natural systems [@Ollerton2011], understanding the factors driving bumble bee decline is essential for their conservation and management.
+
+A number of studies have posited mechanisms underpinning bumble bee declines, including climate change [@Kerr2015; @Marshall2017; @Sirois-Delisle2018], habitat loss [@Grixti2009; @Goulson2015c; @Soroye2020], the proliferation of parasites and disease [@Cameron2011, @McArt2017], and competition with managed bees [@Torne-Noguera2016; @Cane2017; @Mallinger2017a; @Ropars2019]. Among potential drivers the expansion and intensification of agriculture is consistently cited as a key factor in long-term declines of once common species in both the US [@Grixti2009; @Colla2008; @Jacobson2018a] and Europe [@Goulson2005b; @Carvell2006b].  Intensification here refers to a suite of attributes associated with agricultural systems that depend on expansive (large scale) monocultures associated with high inputs of agrichemicals (pesticides, synthetic fertilizers) and disturbances such as annual tillage practices (lots of refs).  Intensification of agriculture therefore includes both attributes within a farming system (i.e., pesticide use, crop types used), and the effects on agricultural landscapes (i.e., decreased diversity of crops, amount of land in cultivation).  A switch from the more diverse and less intensive agricultural production systems of the early 1900's to intensive production systems practiced in many developed countries may have contributed to bumble bee declines due to the loss of preferred host plant species [@Wood2019] and nesting/overwintering habitat [@Liczner2019].
+
+In the United States, analysis of museum records suggests that bumble bee declines began during periods of agricultural intensification in the mid 20th century [@Grixti2009]. Despite several long-term analyses highlighting concerning population trends as well as studies describing the importance of historical land-use [@Cusser2018], there has been no explicit exploration of whether increased agricultural intensification is related to bumble bee declines.  One reason for this is the paucity of long-term data of both bumble bee occurrence and historical agricultural patterns at large spatial scales, as well as the difficulty in assessing potential drivers experimentally. Additionally, variable temporal patterns of species declines have been documented (e.g., long-term declines of European species [@Williams2007] vs. the recent crash of _Bombus affinis_ Cresson in North America [@Giles2006], suggesting that the mechanisms driving declines may be species- and/or region-specific. Moreover, some species populations appear stable, or may be increasing in both abundance and range [e.g., _B. impatiens_ Cresson: @Richardson2018; @Wood2019].  In the US, increases and decreases in bumble bee populations appear to be temporally linked, suggesting that there are shared drivers leading some species to thrive while others struggle.
+
+To understand the drivers of bumble bee declines, several approaches have been developed to overcome data limitations, including experiments leveraging space-for-time substitution, as well as curation of historical museum collections to understand species trends [@Bartomeus2019]. While unable to draw specific causal connections, the use of historical data provides a unique perspective on large-scale temporal trends that experimental approaches cannot provide. Several statistical approaches have been developed to account for the known biases of museum collection records, allowing new data sources to be implemented and used to explore bumble bee population trends [@Pearce2006; @Bartomeus2013; @Bartomeus2019]. The continued addition of museum collection records to repositories such as the Global Biodiversity Information Facility (GBIF) combined with extensive, modern surveys of bumble bee fauna (e.g., Bumble Bee Watch) offer a wealth of species-specific spatial distribution patterns.  Moreover, data describing detailed agricultural production trends in the United States (Crossley et al. _in review_) now offer a unique opportunity to assess the relationship between agricultural patterns and bee population trends over time.
+
+To this end, we explore the relationships between long-term bumble bee population trends and historical patterns of agricultural intensification in the north-central US using an extensive data set of historical bumble bee museum records, modern citizen-science surveys and agronomic metrics distilled from United States Census of Agriculture records over the period 1870-2018. Using relating species relative abundance to agricultural intensity at the county level, we expected that increasing levels agricultural intensification at the county level as measured by proportion cropland, number of crops grown, proportion of pasture, and proportion of land treated with insecticides, are associated with: (1) a decrease in the relative abundance of species of conservation concern; and (2) an increase in the relative abundance of species known to be stable.
+
+# Methods
+We focused our study on the North Central US states of Minnesota, Wisconsin, Iowa, Illinois, Michigan, and Indiana as these states share a similar biogeographic contexts and agricultural history. We limited our analysis to bumble bee species whose core ranges overlapped these states and to limit comparisons of species at their range limits, including: _B. affinis_ Cresson, 1863; _B. impatiens_ Cresson, 1863; _B. griseocollis_ DeGeer, 1773; _B. bimaculatus_ Cresson, 1863; _B. auricomus_ Robertson, 1903; _B. ternarius_ Say, 1837; _B. vagans_ Smith, 1854; _B. borealis_ Kirby, 1837; _B. citrinus_ Smith, 1854; _B. pensylvanicus_ De Geer, 1773; _B. fervidus_ Fabricius, 1798; _B. rufocinctus_ Cresson, 1863; and _B. terricola_ Kirby, 1837. Additionally, several species of conservation concern known to be in decline nationally (including _B. affinis_, _B. terricola_ and _B. pensylvanicus_) have core historic ranges in the north-central US.
+
+### Bumble bee record data
+We obtained bumble bee records using the Global Biodiversity Information Facility (GBIF), querying for all records within our study region. These data were combined with records from the North American Bumble Bee Watch program (www.bumblebeewatch.org) provided by the Xerces Society for Invertebrate Conservation. We then filtered records to include only species known to occur within our study region and which were appropriately geo-referenced (i.e., having associated longitude and latitude). Each record was assigned to a county based on its collection coordinates so that they could be matched to county-level agricultural census data. Because 95% of records were from 1890 and beyond, we are confident that our county assignments are accurate as changes in county geographic extent in this region were largely complete by 1890 [Crossley et al. _in review_].
+
+Temporal comparisons of museum and incidental records can be problematic due to collector/spatial bias and non-standardized collection techniques [@Bartomeus2013; @Richardson2018; @Bartomeus2019]. To account for this, we analyzed records using a variety of techniques to control for potential biases. We filtered the dataset to include only single individual 'sampling events' (unique combination of species, date, location, and collector), following @Richardson2018. All analyses presented below were conducted using both the full and reduced datasets. As we found no difference in the analyses between the full and filtered (Appendix 1), we present results from the full dataset.
+
+### Calculating temporal patterns of abundance and diversity
+We first examined temporal trends species diversity for our study region independent of the agricultural census [@Grixti2009; @Bartomeus2013; @Richardson2018; @Jacobson2018a; @Wood2019].  In this analysis, we used the approach of @Bartomeus2013 and created temporal bins of records such that there were approximately the same number of bee observations per temporal bin. Bins were created using quantiles and the `rbin` package in R.  We created several binning strategies to determine if the number of bins affected our results [@Bartomeus2013], including a total of 3, 5, 8, and 15 temporal bins. Because trends were similar regardless of the number of bins, we present results from the 8-bin analyses for changes in relative abundance and results from the 15-bin analyses for estimation of species richness over time.
+
+In order to estimate species richness changes over time, we rarefied records to generate estimates of mean species richness for each of 15 temporal bins with 95% confidence intervals using the `iNEXT` package [@Hsieh2016]. We then fit a linear model to determine if there was a statistically clear change in species richness over time. Because each time bin contained a different number of years, we used the midpoint of each bin as the value from which to construct the model. We also conducted a permutation test to determine a p-value of the relationship as the assumption of normally distributed data for such a small sample may be violated. Over 1,000 permutations, we randomly shuffled the temporal bin order, calculating the correlation between bin and species richness estimates each permutation, with the p-value equalling the fraction of permuted correlations greater or less than the true chronological correlation value.
+
+### Estimating change in county occupancy
+Changes in relative abundance may not fully capture declines if species remain stable in occupied counties while the number of occupied counties decreases over time. To account for changes in county-level occupancy (i.e., a proxy for range), we modeled the number of occupied counties per equal-record temporal bin for each study species using a generalized linear model, predicting number of counties as a function of temporal bin.
+
+### Historical agriculture data
+To assess the extent, diversity, and intensity of agriculture, we used county-level agricultural census data projected and geographically corrected by Crossley et al. (in review). Our objective was to estimate county-level (n=535 counties) agricultural metrics, which included aspects of both extensive and intensive farming practices. Following Crossley et al., we limited our analysis to the 18 most common crops which together represent a majority of cropland area study region (Crossley et al. in review). For each county by census year, we calculated crop richness and the proportion of county area in cropland as two measures of agricultural intensity.
+
+We also extracted additional aspects of farm management hypothesized to be putative drivers of bumble bee declines. These included acreage of specific agricultural land-uses and practices known to affect bumble bees including pasture acreage and acreage treated with arthropod-targeting insecticides. Because these two variables were not available across the same temporal extent as crop richness and proportion of county in cropland, we conducted a separate analysis from 1982 onward where pasture acreage and insecticide treated acreage were available at the county level.  For our analysis, we converted pasture and insecticide treated acreage to proportion of county area to match the scale of other model variables, namely proportion of county in agriculture.
+
+### Pairing bumble bee records with historical agriculture dataset
+Because agricultural census data are collected every decade, not every bumble bee record was collected in a year concurrently with a census. As such, we paired records such that they were ± 5 years of the nearest agricultural census date (e.g., bumble bee records from 1926-1935 were paired with the 1930 agricultural census). While this pairing may not perfectly reflect the state of agriculture experienced by collected bumble bees, we posit that it is still a meaningful pairing given that a difference of up to 5 years is not likely to manifest in large, county-level changes in agricultural practices that we observed occurring over several decades. To verify this assumption, we performed analyses with a stricter up to ± 2-year pairing rule and found similar results (Appendix 2), thus we present the analysis with the full dataset and up to ± 5-year pairing.
+
+### Relating changes in relative abundance to agricultural intensity
+We constructed statistical models to examine whether changes in metrics of agricultural intensification were related to bumble bee relative abundance. For each bumble bee species, we fit a generalized linear model with a binomial error structure to predict county-level relative abundance (for a given agricultural census year, number of records of a given species divided by total number of bumble bee records) as a function of number of crops grown within a county, the proportion of county area in agriculture and the year of the agricultural census data associated with that bumble bee record, allowing us to determine a temporal trend in species relative abundance while taking into account agricultural intensification. Observations were weighted by the number of bumble bee records in a county by agricultural census year - effectively giving more weight to counties that had greater sampling intensity. We assumed that these counties provided more accurate estimates of species relative abundance at any given time. Additionally, we further limited our analysis to only include counties by year combinations with greater than 5 total bumble bee records to eliminate the presence of counties with little sampling effort, and for which low numbers may artificially inflate the relative abundance of given species.
+
+Because of the spatial nature of these data, we tested for spatial autocorrelation in the residuals using a Moran's I test in the `spdep` package [similar to @Meehan2011; and @Meehan2015]. We also checked for temporal autocorrelation within the response of each species. Because neither spatial nor temporal autocorrelation were found to be problematic, we utilized the generalized linear model framework described above across all species.
+
+To illustrate the estimated change in relative abundance and range, we used our fitted models to predict occurrence across historical ranges of each species within our study area using county-level agricultural intensification metrics. These maps describe the predicted probability of occurrence in each county as function of crop diversity and proportion of a county in cropland over time. We selected 6 time points for which to fit models: 1870, 1900, 1930, 1959, 1974, and 2012 to depict how county-level agricultural suitability for bumble bees has changed over time.
+
+Another series of models were constructed to test more detailed hypothesized drivers of bumble bee decline. Generalized linear models with a binomial error structure were fit to predict county-level species relative abundance as a function of pasture acreage, acreage treated with arthropod-targeting insecticides, and the agricultural census year. Because the agricultural census did not begin capturing insecticide input data until 1982, these models were fit on a subset of data from 1982 to present. By adding these more mechanistic drivers to the broad scale intensification metrics, we are able to see if the response of the proportion cropland and crop richness remains consistent given additional drivers that might be correlated to these variables. If the responses remain consistent, we can be confident that the results from the long-term data set using proportion cropland and crop richness are tenable to explain the patterns of bumble bee relative abundance observed even if the more mechanistic drivers, pasture acreage and insecticide inputs, are also strong predictors of bumble bee relative abundance. In addition, we examined variance inflation factors (VIF) for each model to determine whether variables were problematically multi-collinear.  While a number of other drivers might be directly or interactively influencing bumble bee relative abundance [e.g., climate], other studies have shown independent effects of land-use change and climate [@Kerr2015; @Soroye2020], suggesting it is sufficient to examine agricultural intensification metrics on their own.
+
+# Results
+Bumble bee occurrence records were compiled from GBIF (n=25,271 from 1877 to 2017) and Bumble Bee Watch (n=2,611, from 2007 to 2018) for a total of 27,882 unique records over 358 of 535 counties (Fig. S1). The species contained in each dataset were mutually inclusive. We removed _B. fraternus_, _B. perplexus_, _B. ashtoni_ (_bohemicus_), and _B. variabilis_ from our analyses as these species lacked sufficient records to make meaningful temporal interpretations of changes in relative abundance and county occupancy.
+
+### Changes in species richness
+Rarefied species richness estimates for each temporal bin show estimated species richness declining 20% from 15 species in 1824-1925 to 12 species presently (Fig. 1) - a significant negative trend (t<sub>1,13</sub> = 6.084, p = 0.0283). All fifteen temporal bin species accumulation curves rapidly reached an asymptote, indicating that sample sizes with this bin size were sufficient to capture the diversity of communities within each bin (Fig. S2). A sharp drop in estimated species richness occurred between 1952 and 1959, followed by a slight rebound in the next 50 years.  The pattern of decreasing species richness was maintained at two other binning levels, 5 and 8 bins (Fig. S3)
+
+### Changes in county occupancy
+Overall, most species increased in county occupancy over time (Fig. S4). However, some species of conservation concern showed either a decrease (_B. terricola_, and _B. pensylvanicus_), or no change (_B. affinis_) in county occupancy over time despite the increase in sampling effort that has occurred over the last few decades.
+
+### Changes in agricultural intensification
+The areal extent of cropland peaked in our region in 1950 (average of 45% ± 22% of county area). Since then, it has decreased almost 10% to an average of 34% ± 20% (Fig. 3A,B). Intensive agriculture has remained relatively sparse in the north of our study region, while the highest intensity occurs in the "corn belt" that stretches through southern Minnesota, Iowa, southern Wisconsin, central and northern Illinois, and northern Indiana. Throughout the last century, the number of agricultural crops crown has decreased (Fig. 3C,D). Of the 18 crops for which we compiled data, an average of 12 ± 1 were grown from 1880 - 1950. Since 1950, this number has declined 50%, with counties today growing on average 6 ± 1 crops.
+
+The more fine-scale agricultural intensification variables we measured showed diverging patterns, with pasture acreage declining 90% from 1982 to present from an average of 3% of county area in 1982 to 0.3% in 2012, while the total county area treated with insecticides increased 54% from an average of 11% of county area in 1982 to 17% in 2012. (Fig. S5). These changes occurred over similar spatial extents, primarily concentrated in the corn-belt counties throughout the middle of the study region.
+
+### Patterns of bumble bee relative abundance are related to agricultural intensity
+Patterns in bumble bee relative abundance showed strong associations with trends in agricultural intensification metrics. Overall, we found that 7 of 13 species decreased in relative abundance, while 3 remained stable and 3 increased (Fig. 4, Table S1). These estimates of temporal change in relative abundance modeled concurrently with metrics of agricultural intensity aligned well with changes estimated from generalized linear models fitted with time period as the sole predictor (Appendix 3). Species increasing in relative abundance over time tended to be positively associated with increases in proportion of agriculture as well as crop richness (Fig. 4B,C). Among species estimated to be in decline, county-level proportion of agriculture was negatively associated with relative abundance in all but two species (Fig. 4B). The responses of species in decline to crop richness was generally positive, with a majority increasing in relative abundance in accordance with crop richness (Fig. 4C).
+
+When we used county-level agricultural statics to predict the probability of species occurrence within our study region from 1870-2012, we see a marked expansion of common species in space (e.g., _B. impatiens_, _B. bimaculatus_) whereas probability of occupancy decreases across the region for species of conservation concern (e.g., _B. terricola_, _B. affinis_, _B. pensylvanicus_, Fig. 3E-H, Fig. S6).
+
+We found that models that included more detailed agricultural metrics, available from 1982 to present, were clearly associated with patterns of relative abundance (Fig 6,D,E, Table S3). Pasture acreage had a consistently positive association on relative abundance (Fig. 6D), although the acres of pasture per county has markedly decreased over the last century (Fig. S4B). Proportion of county area treated with insecticides had a consistently negative effect on species relative abundance, except for 3 species that exhibited no effect (Fig. 6E, _B. auricomus_, _B. impatiens_, and _B. pensylvanicus_) and 3 species which were positively associated with increased insecticide application (_B. affinis_, _B. rufocinctus_ and _B. vagans_).  One species of conservation concern, _B. terricola_, had the strongest negative relationship with proportion of county treated with insecticides.
+
+# Discussion
+Using bumble bee observations recorded over 140 years across 6 north-central US states and an unprecedented dataset on the historical patterns of agricultural land use and practices (extent of cropland, diversity of crops grown, extent of pasture, pesticide use), we explored the hypothesis that agricultural intensification is associated with bumble bee declines. Our results support declines of a number of bumble bee species throughout the region and suggest that increases in agricultural intensification are associated with these declines.
+
+Human alteration of terrestrial landscapes via habitat loss is cited as a principle cause of biodiversity declines worldwide [@Foley2005a; @Klein2007g; @Foley2011b; @Tilman2011; @Tscharntke2012].  Our study joins a number of taxa-specific studies that highlight the threat of modern agricultural practices to biodiversity [e.g., birds @Benton2002; @Robinson2002; @Meehan2010a]. Recent documented declines in insect populations have speculated that habitat loss and intensification of agriculture are likely key contributors to these patterns [@Hallmann2017; @Seibold2019], though studies explicitly tying long-term trends in widespread agricultural intensification to bumble bee declines have been lacking.
+
+Of the 13 species in this study, 3 were found to increase over the study dataset (1870-2017), 3 remained at similar levels, and 7 were found to have declined in relative abundance. The declining species in our study match those found to be in decline elsewhere, including individual state analyses within our study region [@Grixti2009; @Wood2019], the US East coast [@Richardson2018; @Jacobson2018a], Canada [@Colla2008], and North America, generally [@Cameron2011; @Colla2012]. Those showing the most concerning trends include _B. terricola_ and _B. pensylvanicus_, both of which significantly decreased in relative abundance as well as showed distinct decreases in the predicted extent of their range over time.
+
+With few exceptions, species whose relative abundance was found to be increasing or stable had either positive or neutral relationships with agricultural intensity metrics, while those in decline were negatively associated with increased agricultural intensity.  However, agricultural intensification includes several aspects.  While the areal extent of agriculture (proportion of cropland in county) was negatively associated with several species, other species seem to thrive in high proportion of agriculture including _B. pensylvanicus_, a species of conservation concern. Moreover, bumble bee species richness was greatest during the period of greatest areal agricultural extent (1900-1930). On the other hand, the land-use type (e.g., pasture) of and increased diversity of crops generally have positive effects on bumble bees relative abundance, while inputs such as pesticides have few positive effects.  This suggests that the extent of agriculture is not the sole putative driver of bumble bee decline, but rather the manner in which agriculture is practiced matters greatly.  Landscapes with a high areal extent of agriculture may still support a stable and diverse bumble bee community provided there is a high diversity of crops and open habitat such as pasture as well as limited insecticide use.
+
+The mechanisms underlying the observed relationships between bumble bees and proportion cropland and crop diversity were not tested in this study.  However, we propose that reductions in suitable nesting and foraging habitat associated with agricultural intensification, along with the direct/indirect lethality of insecticides, are likely important underlying factors. Increases in agricultural land have been implicated in the loss of diverse floral habitat such as tall-grass prairies [@Smith1998; @Brown2011], as well as large-scale reductions in bumble bee forage plants [@Carvell2006b; @Scheper2014]. A shift from the diverse cropping systems of the early to mid 1900's to largely monocultural systems in recent years has undoubtedly altered total floral resource availability and temporal continuity [@Schellhorn2015c] and has been shown to negatively impact bumble bee colony development [@Hass2018a]. While some mass-flowering crops might benefit bumble bee colony growth [@Westphal2009a], they may also favor species that can tolerate highly variable temporal resources [@Schmid-Hempel1998a; Hemberger et al. in revision] and provide little dietary diversity for foraging bees. Such a limit on pollen and nectar diversity may have adverse consequences for bumble bees [@Vaudo2015], especially those with limited diet breadth [@Kleijn2008; @Wood2019]. Additionally, landscapes that restrict floral resource availability during key time periods might limit bumble bee colony growth [@Williams2012b] and subsequent queen production [@Crone2016], thereby reducing population stability over time.
+
+The largely positive response of relative abundance to crop richness suggests that increasing agricultural landscape heterogeneity could have benefits for both common and declining bumble bee species. Increasing landscape heterogeneity is known to benefit a number of ecosystem services [@Fahrig2011b; @Turner2012] and biodiversity [@Benton2003; @Sirami2019], even with relatively simple changes in cropland heterogeneity.  In fact, a recent study suggests that adjustments to agronomic practices, specifically decreasing field size, could have larger positive effects on farmland biodiversity than increasing the amount of semi-natural habitat in the landscape [@Sirami2019]. Moreover, decreasing field sizes may be easier to implement and incentivize through traditional farm policy frameworks. As natural habitats are becoming increasingly rare, alterations that we can make to our land use practices [e.g., @Landis2017] will be the key toward building multi-functional agroecosystems that both provide food and fiber for humans, as well as conserve essential ecosystem service providing organisms and biodiversity writ large.
+
+The proportion of pasture in a county was positively associated with bumble bee relative abundance for all but three species (which showed no relationship). Pastures and grasslands are often a source of floral habitat for foraging bumble bees both in the US and in Europe [@Carvell2006b] as these open areas often contain plants in the family Fabaceae, a preferred source of bumble bee forage [@Goulson2005b] especially in several Midwestern bumble bees species [@Fye1954a]. While pastures and fabaceous cover crops were used heavily in the early 20th century to return nitrogen to soils, technological advancements following the second world war (namely artificial, nitrogenous fertilizers) led quickly to the decline in these crops [@Williams1986; @Williams2009].
+
+Generally, our analysis of the dataset with insecticide data (1982-present) showed that increases in the acreage of cropland treated with insecticides tended to be associated with decreased relative abundance of all but three species.  There is clear evidence that exposure to insecticides is detrimental to bumble bee foraging [@Feltham2014], colony development [@Whitehorn2012; @Crall2018], and may also facilitate increased pathogen prevalence [@McArt2017].  Our analysis provides additional evidence of the detrimental effect of insecticide use on bumble bees over a large spatial and temporal scale.
+
+Interestingly, in this dataset we found no evidence of decline in the relative abundance of the federally endangered _B. affinis_ across our study region. This result stands in contrast to other findings by almost all other longitudinal studies in which _B. affinis_ is considered [@Grixti2009; @Richardson2018]. However, when examining patterns of _B. affinis_ decline across its entire range, there is clear evidence for extensive range reductions and local extirpations [@Cameron2011; Colla2012].  Indeed, the subset of the range observed in our study has the most extensive modern records of _B. affinis_, suggesting that our observed regional patterns may differ from range-wide population trends.
+
+Museum records are an invaluable source of data for studies examining changes in species range and long-term population trends [@Bartomeus2019], as well as understanding the ecological drivers that underpin changes in species assemblages over time [@Wood2019]. A strength of leveraging long-term museum records, including our approach, includes the ability to examine spatial and temporal scales that are not amenable to experimental methods [@Meehan2011]. However, care must be taken to account for biases associated with historical collections. For example, museum collection records do not necessarily adhere to standard ecological practices of ensuring random, equal-effort samples over adequate space and time [@Richardson2018]. To account for known issues, we employed a variety of techniques including subsampling and sensitivity analyses to determine whether our chosen methods skewed results [for a thorough analysis of techniques to leverage historical collections, see @Bartomeus2019]. Irrespective of the approaches used, we consistently identified declines in over half of study species with clear associations to metrics of agricultural intensity.
+While there is much evidence for the consequences of agricultural intensification on bumble bee communities, other variables may also be driving shifts.  For example, climate change has reduced bumble bee ranges in both North America and Europe [@Soroye2020].  In their analysis, @Soroye2020 found that climate and land-use changes impact bumble bee occupancy independently.  That is to say that while climate may be driving large-scale range shifts, land-use still has strong, negative effects on bumble bee occupancy – an effect that we show strong evidence for here.
+
+It is important to place the observed changes in relative abundance and county occupancy into a larger context. Examining changes from 1870 to present day may not accurately capture the pre-European settlement baseline of the study species examined. By 1870, many counties were already extensively altered by both agriculture and deforestation [@Rhemtulla2007a]. In some cases (e.g., Michigan), these alterations may have provided more floral resources by creating open habitat, resulting in the increase of some bumble bee species [@Wood2019]. In shifting from the agronomic practices of the early 20th century to the more industrialized, intensive practices of the later 20th century, the suitability for those previously favored bumble bees decreased paving way for the rise of others. The lack of true historical baselines does not mean that the declines described in this study are normal or unworthy of immediate conservation action. The scale and intensity of agricultural intensification over the last 60 years is unprecedented and the risks to bumble bees clear. The dualism of bumble bee species responses to agricultural intensification both historically and contemporarily suggests that species habitat requirements are variable - something we must explicitly consider in planning bumble bee conservation strategies.
+
+### Conclusions
+Modern experimental evidence has provided evidence of the effect of agricultural intensification on bumble bees.  By relating changes in historical, county-level agricultural intensity to changes in the relative abundance of bumble bee species across the upper Midwest, we provide historical context of the extent and duration of declines, further solidifying the evidence that agricultural intensification is a key driver of shifts in bumble bee community composition and abundance over the last century. Over the last 140 years, agricultural intensification – specifically how agriculture is practiced rather than simply the amount – has elicited strong, selective pressures inadvertently choosing winner and loser species in bumble bee communities. Our work concurs with an existing body of evidence, including recent, catastrophic declines documented in insect and arthropod abundance in agriculturally dominated landscapes. There is still a great need for additional experimentation to understand how land use drivers might interact with other known causes of bumble bee decline, namely climate change and pathogen and disease prevalence. The combination of our results leveraging museum records and historical data along with a growing body of experimental evidence suggests that changes to our agricultural practice and policies are required in order to limit additional declines of bumble bees in our agricultural landscapes.
+
+
+# Acknowledgements
+We would like to thank Christelle Guédot, John Orrock, and Russ Groves for the valuable feedback that improved this manuscript. Many thanks to Rich Hatfield and the Xerces Society for Invertebrate Conservation for providing Bumble Bee Watch data. Data and code for all analyses, figures, and the manuscript will be made publicly available upon publication at https://github.com/jhemberger.
+\clearpage
+
+\newpage
+
+# Figures and Tables
+
+<center>
+![](../ms_figs/fig1.png){ width=60% }
+</center>
+**Figure 1:** Trend in rarified bumble bee species richness from 1877-present.  Each point represents a date range that is standardized to contain an approximately equal number of bumble bee records, and it is plotted at the midpoint year of the date range.  Error bars are 95% confidence intervals.  The fitted line is a linear model predicting estimated species richness as a function of temporal bin order using the midpoint of the temporal bin as the predictor.  Carpet plot represents temporal collection year for all records from 1877 to present.
+
+\clearpage
+
+\newpage
+![](../ms_figs/fig2.png){ width=100% }
+
+**Figure 2:** Patterns of agricultural intensification in two metrics: (A) proportion of county under cultivation and (C) number of crops grown per county. Inset graphs (B,D) depict general trend of these variables for each state in the study area as modeled by a Loess curve.  Predicted probability of occurrence for two example species, _B. impatiens_ (E,F) and _B. terricola_ (G,H) in each county given crop diversity and proportion cropland in each county.  Darker colors denote smaller probability of occurrence, while lighter colors indicate larger probability of occurrence.  Red points on each map are randomly selected occurrence records with a maximum of 50 plotted per year. (F,H) Fitted temporal trend of relative abundance when modeled with agricultural intensity metrics.  Solid red lines denote statistically clear trend in relative abundance over time (p < 0.05), while dashed lines denote statistically unclear trends (p > 0.05).  Points on temporal trend are slightly jittered for visibility. Color palettes derived using quantile binning. Values above maps are mean ± SEM for each response.
+
+\clearpage
+
+\newpage
+![](../ms_figs/fig3.png){ width=100% }
+
+**Figure 3:** Fitted model coefficients (± 95% confidence interval) for each study species for (A) temporal trend of the species, (B) proportion of county in cropland, and (C) the number of crops grown in a county. Models were fitted using the entire dataset from 1870-present. Point colors indicate species relative abundance trend from 1870-present: yellow points denote species whose relative abundance declined, gray points denote no change in relative abundance, and black points denote increases in relative abundance.
+
+\clearpage
+
+
+\newpage
+<center>
+![](../ms_figs/fig5.png){ width=100% }
+</center>
+
+**Figure 4:** Fitted model coefficients (± 95% confidence interval) for each study species for (A) temporal trend of the species, (B) proportion of county in cropland, and (C) the number of crops grown in a county, (D) acres of pasture grown in a county, and (E) acres treated with insecticides.  Models were fitted using data from 1982-present (only years for which pesticide and pasture acreage are available across all counties).  Point colors indicate species relative abundance trend from 1982-present: yellow points denote species whose relative abundance declined, gray points denote no change in relative abundance, and black points denote increases in relative abundance.
+
+\clearpage
+
+\newpage
+
+# Supplementary Material
+### Appendix 1
+
+**Analysis filtering data to unique _species x location x collector x date_ combinations**
+
+To determine whether sampling effort by individuals skewed the results of our analysis, we fit our primary model (`relative abundance ~ proportion cropland + number of crops + agricultural census year`; results shown in Fig. 3) to a reduced dataset, filtering records to include only unique combinations of species, location, collector, and collection date.  We found similar results in terms of the effect magnitude of predictors (proportion of cropland and number of crops), as well as the direction of the effect across study species (Fig. SA1.1).
+
+<center>
+![](../ms_figs/appendix1.png){ width=60% }
+**Figure SA1.1** Fitted model coefficients (± 95% confidence interval) for each study species for (A) temporal trend of the species, (B) proportion of county in cropland, and (C) the number of crops grown in a county. Models were fitted using the entire dataset from 1870-present, but filtered to unique species x location x collector x date combinations. Point colors indicate species relative abundance trend from 1870-present: yellow points denote species whose relative abundance declined, gray points denote no change in relative abundance, and black points denote increases in relative abundance.
+</center>
+
+\clearpage
+
+\newpage
+### Appendix 2
+
+**Analysis restricting to records within ± 2 years of agricultural census**
+
+As agricultural census records are collected every 10 years, we were required to pair bumble bee records to the nearest agricultural census (a difference of up to ± 5 years).  This requirement might skew results if agricultural metrics display non-linear trends between census years.  TO determine if this was the case, we filtered records such that only bumble bee within ± 2 years of an agricultural census data were included.  Modeling these data resulted in broadly similar patterns of species relative abundance trends and response to proportion agriculture.  The response of species to number of crops showed the effect magnitude increase for some species, but the rank order of species responses was mostly similar (Fig. SA2.1).
+
+<center>
+![](../ms_figs/appendix2.png){ width=60% }
+**Figure SA1.1** Fitted model coefficients (± 95% confidence interval) for each study species for (A) temporal trend of the species, (B) proportion of county in cropland, and (C) the number of crops grown in a county. Models were fitted using the entire dataset from 1870-present, but filtered to only include bumble bee records within ± 2 years of an agricultural census. Point colors indicate species relative abundance trend from 1870-present: yellow points denote species whose relative abundance declined, gray points denote no change in relative abundance, and black points denote increases in relative abundance.
+</center>
+
+\newpage
+### Appendix 3
+**Raw changes in species relative abundance over time**
+
+For each species, we calculated relative abundance for each temporal bin as the number of records of a given species divided by the total number of records for all species in that temporal bin. We then tested whether there was a statistically clear change in relative abundance over time by fitting generalized linear models with binomial error distributions for each species using time (i.e., temporal bin) as the sole predictor with each point weighted by the number of records [similar to @Bartomeus2013].
+
+Of the 13 species included in our simple analysis of change in relative abundance over time, 6 saw statistically clear reductions in relative abundance: _B. borealis_, _B. fervidus_, _B. pensylvanicus_, _B. rufocinctus_, _B. terricola_, _B. vagans_ (Table S1). Similar to the patterns of estimated species richness, reductions in the relative abundance of these declining species seem to begin in the middle of the 20th century.  There were 7 species which increased in relative abundance over time period covered by this dataset: _B. affinis_, _B. auricomus_, _B. bimaculatus_, _B. citrinus_, _B. griseocollis_, _B. impatiens_, and _B. ternarius_.
+
+**Table SA3.1:** Relative abundance estimates for each species across 8 time bins, sized in order to contain approximately equal numbers of bumble bee records per bin.  Coefficient estimates and p-values derived from models fit to estimate trends in relative abundance over time, where relative abundance of each species is predicted by time bin fit using a generalized linear model, with N records representing the number of records for a given species.
+<center>
+![](../ms_figs/table1.png){ width=100% }
+</center>
+
+\clearpage
+
+**Supplementary Table 1:** Generalized linear model results for each study species including the sample size (number of counties for which relative abundance is calculated), model term, scaled coefficient estimate, 95% confidence interval and p-value.  Each county is weighted by the total number of bumble bee records for a given time point (agricultural census year).
+<center>
+![](../ms_figs/tables1.png){ width=60% }
+</center>
+\clearpage
+
+**Supplementary Table 3:** Generalized linear model results for each study species including the sample size (number of counties for which relative abundance is calculated), model term, scaled coefficient estimate, 95% confidence interval and p-value.  Each county is weighted by the total number of bumble bee records for a given time point (agricultural census year).
+<center>
+![](../ms_figs/tables2.png){ width=60% }
+</center>
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig_s2.png){ width=80% }
+</center>
+**Supplementary Figure 1:** The location of bumble bee records for each US Census of Agriculture year considered in our analysis.  The number of records is noted below the year.  Points are partially transparent and jittered slightly for visibility.
+
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig_s3.png){ width=60% }
+</center>
+**Supplementary Figure 2:** Sample-based species accumulation curves for each of 15 temporal bins (different colors) from which estimated species richness was calculated (Fig. 1).  Each accumulation curve is constructed for temporal bins with a roughly equal number of records.
+
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig_s1.png){ width=60% }
+</center>
+**Supplementary Figure 3:** Trend in rarified bumble bee species richness from 1877-present for alternative numbers of temporal bins, each representing approximately equal numbers of bumble bee records: (A) 5 temporal bins and (B) 8 temporal bins.  Each point is plotted at the midpoint of the temporal bin date range.  Error bars are 95% confidence intervals.  The fitted line is a linear model predicting estimated species richness as a function of temporal bin order using the midpoint year of the temporal bin as the predictor.  Carpet plot represents temporal collection year for all records from 1877 to present.
+
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig6.png){ width=100% }
+</center>
+
+**Supplementary Figure 4:** (A) Fitted model coefficients for each species for change in county occupancy over time.  (B) For each species, plotted temporal trends of county occupancy over time with fitted GLM models with 95% confidence interval. Point colors indicate species relative abundance trend from 1870-present: red points denote species whose relative abundance declined, black points denote no change in relative abundance, and blue points denote increases in relative abundance.
+
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig_s4.png){ width=100% }
+</center>
+**Supplementary Figure 5:** Patterns of agricultural intensification in two additional metrics from 1982-2012: (a) proportion of county area in pasture and (c) proportion of county area treated with insecticides.  Color palettes derived using quantile binning.  Inset graphs (b,d) depict general trend of these two variables for each state in the study area as modeled by a Loess curve.  Values beneath years are mean proportion ± SEM.
+
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig4a.png){ width=100% }
+</center>
+\clearpage
+
+\newpage
+<center>
+![](../ms_figs/fig4b.png){ width=100% }
+</center>
+
+**Supplementary Figure 6:** Fitted temporal trend of relative abundance when modeled with agricultural intensity metrics along with the predicted probability of occurrence for each study species in each county given crop diversity and proportion cropland in each county.  Darker colors denote smaller probability of occurrence, while lighter colors indicate larger probability of occurrence.  Solid red lines denote statistically clear trend in relative abundance over time (p < 0.05), while dashed lines denote statistically unclear trends (p > 0.05).  Points on temporal trend are slightly jittered for visibility.  Red points on each map are randomly selected occurrence records with a maximum of 50 plotted per year.
+
+\clearpage
+
+# References

@@ -1,3 +1,14 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Species GLMs"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
 ## Spatial/OLS modeling function (by species)
 See which species show significant spatial autocorrelation and use LeGrange test to estimate best spatial model to use
 
@@ -79,7 +90,9 @@ spatial.autocorr.test <- function(spdf) {
   for (i in spdf.list) {
     listnumber <- listnumber + 1
     # OLS Model
-    glm.model <- glm(rel_abun ~ n_crops + prop_cropland,
+    glm.model <- glm(rel_abun ~ n_crops + 
+                       prop_cropland +
+                       n_crops*prop_cropland,
                      data = i@data,
                      weights = i@data$bin_ag_abundance,
                      na.action = na.exclude)
@@ -110,7 +123,7 @@ spatial.autocorr.test <- function(spdf) {
   spatial.corr.df <- bind_rows(modelresults.list)
 }
 
-spatial.corr.test.df <- spatial.autocorr.test(spatial.corr.test.spdf)
+autocorr.spp.df <- spatial.autocorr.test(spatial.corr.test.spdf)
 ```
 
 ## Spatial models function: 1870-2018
@@ -121,13 +134,15 @@ spatial.corr.models <- function(spdf) {
   spatial.test.list <- list()
   spdf.list <- list()
   species <- c("Bombus affinis",
-               "Bombus griseocollis",
                "Bombus impatiens",
-               "Bombus ternarius")
+               "Bombus ternarius",
+               "Bombus vagans")
   for (i in species) {
     model.spdf <- analysis.spdf %>%
       filter(species == i) %>%
-      filter(!is.na(prop_cropland))
+      filter(!is.na(prop_cropland) &
+               !is.na(n_crops) &
+               !is.na(rel_abun))
     spdf.list[[i]] <- model.spdf
     # assign("test.list",
     #        spdf.list,
@@ -138,12 +153,17 @@ spatial.corr.models <- function(spdf) {
   modeloutput.list <- list()
   sma.results.list <- list()
   sma.models.list <- list()
+  predict.list <- list()
   for (i in spdf.list) {
     listnumber <- listnumber + 1
     glm.model <- glm(rel_abun ~ 
                        n_crops + 
                        prop_cropland + 
-                       bin_ag,
+                       bin_ag + 
+                       n_crops*bin_ag + 
+                       prop_cropland*bin_ag +
+                       n_crops*prop_cropland + 
+                       n_crops:prop_cropland:bin_ag,
                      data = i@data,
                      weights = i@data$bin_ag_abundance,
                      family = binomial(link = "logit"),
@@ -176,16 +196,25 @@ spatial.corr.models <- function(spdf) {
     fit.sma <- errorsarlm(rel_abun ~ 
                             scale(n_crops) + 
                             scale(prop_cropland) + 
-                            scale(bin_ag),
+                            scale(bin_ag) +
+                            scale(n_crops*bin_ag) +
+                            scale(prop_cropland*bin_ag) +
+                            scale(n_crops*prop_cropland) + 
+                            scale(n_crops*prop_cropland*bin_ag),
                           data = i,
                           weights = bin_ag_abundance,
                           listw = weights,
-                          zero.policy = TRUE)
+                          zero.policy = TRUE,
+                          na.action = na.omit)
     sma.models.list[[listnumber]] <- fit.sma
     sma.model.df <- tibble(term = c("(Intercept)",
                                     "n_crops",
                                     "prop_cropland",
-                                    "bin_ag"),
+                                    "bin_ag",
+                                    "n_crops:bin_ag",
+                                    "prop_cropland:bin_ag",
+                                    "n_crops:prop_cropland",
+                                    "n_crops:prop_cropland:bin_ag"),
                            estimate = (summary(fit.sma)$Coef[, 1]),
                            std.error = (summary(fit.sma)$Coef[, 2]),
                            statistic = (summary(fit.sma)$Coef[, 3]),
@@ -199,7 +228,12 @@ spatial.corr.models <- function(spdf) {
                                   "(Intercept)",
                                   "n_crops",
                                   "prop_cropland",
-                                  "bin_ag")) %>%
+                                  "bin_ag",
+                                  "n_crops:bin_ag",
+                                  "prop_cropland:bin_ag",
+                                  "n_crops:prop_cropland",
+                                  "n_crops:prop_cropland:bin_ag"
+                                  )) %>%
                   dplyr::select(term, lower.ci = `2.5 %`, upper.ci = `97.5 %`),
                 by = c("term" = "term")) %>%
       dplyr::select(species, 
@@ -214,9 +248,19 @@ spatial.corr.models <- function(spdf) {
                     p.value)
     print(sma.model.df)
     sma.results.list[[listnumber]] <- sma.model.df
+    predict.df <- predict(fit.sma,
+                          newdata = i,
+                          listw = weights,
+                          all.data = TRUE)
+    predict.df$species <- i@data$species[1]
+    predict.list[[listnumber]] <- predict.df
   }
+  # sma.predict.df <- bind_rows(predict.list)
   glm.results.df <- bind_rows(modelresults.list)
   sma.results.df <- bind_rows(sma.results.list)
+  assign("sma.predict.list",
+         predict.list,
+         envir = .GlobalEnv)
   assign("glm.spatialauto.df",
          glm.results.df,
          envir = .GlobalEnv)
@@ -234,6 +278,17 @@ spatial.corr.models <- function(spdf) {
 spatial.corr.models(spatial.corr.test.spdf)
 sma.spatialauto.df
 glm.spatialauto.df
+
+sma.models.list[[1]]
+glms.df %>%
+  filter(species == "Bombus affinis")
+
+predict.df <- predict(sma.modles.list[[1]],
+        newdata = spatial.corr.test.spdf %>%
+          filter(species == "Bombus affinis"),
+        listw = lw,
+        pred.type = "TS")
+predictorEffects(sma.models.list[1])
 ```
 
 ### Combine spatial models with GLMs
@@ -241,9 +296,9 @@ glm.spatialauto.df
 # Coef's from glms.df already scaled.
 models.1870.2018.df <- glms.df %>%
   filter(!species %in% c("Bombus affinis",
-                         "Bombus griseocollis",
                          "Bombus impatiens",
                          "Bombus ternarius",
+                         "Bombus vagans",
                          "Bombus ashtoni",
                          "Bombus fraternus",
                          "Bombus variabilis")) %>%
@@ -541,10 +596,12 @@ coef.1982.2018.plot <- models.1982.2018.df %>%
              scales = "free_x") +
   theme_histbumbles() +
   theme(legend.position = "none") +
+  scale_y_continuous(breaks = scales::breaks_pretty((4))) +
   coord_flip()
 ggsave("./model_plots/coefs/coef_1982_2018.eps",
        coef.1982.2018.plot,
        height = 4,
        width = 10)
 ```
+4
 

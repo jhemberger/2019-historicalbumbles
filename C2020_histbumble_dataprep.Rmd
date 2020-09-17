@@ -1,0 +1,404 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Historical bumble bee records data cleanup & prep"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# CODE PURPOSE
+This R Notebook provides the code to load, clean, prepare, and export model-ready data from raw records of bumble bee occurrence from both GBIF and BumblebeeWatch provided data. 
+
+## Data cleaning
+Generally, the intent of the data wrangling process is to remove records that: do not contain species identity, are not geographically referenced with lat/long, fall outside of our study region of interest, are species known to not occur in our study region of interest. 
+
+## Data preparation
+Here, the intent is to take data of cleaned bumble bee occurrence records and summarise it by the study geography of interest, the county. The records are summarised to calculate the relative abundance of each species in the counties they occur in, filtering above a certain number of total bumble bee records per county to eliminate the impact of singleton occurrences inflating relative abundance.
+
+## Major output
+`all.bumbles.df` <- all cleaned bumble bee records for coterminuous US
+`study.bumbles.df` <- all cleaned bumble bee records for study states (MN, IA, WI, IL, MI, IN)
+`analysis.bumbles.df` <- full dataset, all county records
+`analysis.2.bumbles.df` <- reduced dataset, filtered to unique collection events
+`analysis.3.bumbles.df` <- reduced dataset, filtered to +/- 3 years from ag census year
+
+# LOAD PACKAGES
+```{r}
+library(rgdal)
+library(ggmap)
+library(raster)
+library(maptools)
+library(maps)
+library(mapdata)
+library(tidyverse)
+library(openintro)
+```
+
+# LOAD DATA
+## Raw data
+```{r}
+gbif.bumbles.raw <- read_tsv("./gbif_bumbles_2018.csv",
+                             col_names = TRUE,
+                            na = "NA")
+xerc.bumbles.raw <- read_csv("./bbw_us_5sept2018.csv",
+                             col_names = TRUE,
+                             na = "NA")
+agvars.df <- read_csv("./data/midwest_agstats.csv")
+```
+
+# DATA WRANGLING
+## Standardize data structure: 
+```{r}
+gbif.bumbles <-
+  tibble(
+  unique.id = seq(from = 1, to = nrow(gbif.bumbles.raw)),
+  og_database = "gbif",
+  database_id_1 = gbif.bumbles.raw$gbifid,
+  database_id_2 = gbif.bumbles.raw$occurrenceid,
+  database_id_3 = gbif.bumbles.raw$catalognumber,
+  collector = gbif.bumbles.raw$recordedby,
+  phylum = gbif.bumbles.raw$phylum,
+  class = gbif.bumbles.raw$class,
+  order = gbif.bumbles.raw$order,
+  family = gbif.bumbles.raw$family,
+  genus = gbif.bumbles.raw$genus,
+  species = gbif.bumbles.raw$species,
+  id_to_taxon = gbif.bumbles.raw$taxonrank,
+  sci_name = gbif.bumbles.raw$scientificname,
+  country = gbif.bumbles.raw$countrycode,
+  state = NA,
+  county = NA,
+  locality = gbif.bumbles.raw$locality,
+  dec_lat = gbif.bumbles.raw$decimallatitude,
+  dec_long = gbif.bumbles.raw$decimallongitude,
+  elevation = gbif.bumbles.raw$elevation,
+  date = gbif.bumbles.raw$eventdate,
+  day = gbif.bumbles.raw$day,
+  month = gbif.bumbles.raw$month,
+  year  = gbif.bumbles.raw$year,
+  institution_code = gbif.bumbles.raw$institutioncode,
+  database_notes_1 = gbif.bumbles.raw$issue,
+  database_notes_2 = NA,
+  database_notes_3 = NA
+  )
+
+xerc.bumbles <-
+  tibble(
+  unique.id = seq(from = 1, to = nrow(xerc.bumbles.raw)),
+  og_database = "bb_watch",
+  database_id_1 = xerc.bumbles.raw$`Bee Id`,
+  database_id_2 = NA,
+  database_id_3 = NA,
+  collector = xerc.bumbles.raw$Observer,
+  phylum = "Arthropoda",
+  class =  "Insecta",
+  order = "Hymenoptera",
+  family = "Apidae",
+  genus = "Bombus",
+  species = xerc.bumbles.raw$Species,
+  id_to_taxon = ifelse(is.na(xerc.bumbles.raw$Species), 
+                       "GENUS", 
+                       "SPECIES"),
+  sci_name = paste(xerc.bumbles.raw$Genus, 
+                   xerc.bumbles.raw$Species, 
+                   sep = " "),
+  country = xerc.bumbles.raw$Country,
+  state = xerc.bumbles.raw$`Provinces/States`,
+  county = NA,
+  locality = xerc.bumbles.raw$Locality,
+  dec_lat = xerc.bumbles.raw$Latitude,
+  dec_long = xerc.bumbles.raw$Longitude,
+  elevation = NA,
+  date = as.character(xerc.bumbles.raw$`Date Observed`),
+  day = NA,
+  month = NA,
+  year = NA,
+  institution_code = xerc.bumbles.raw$Project, 
+  database_notes_1 = xerc.bumbles.raw$`Floral Host`,
+  database_notes_2 = xerc.bumbles.raw$Status,
+  database_notes_3 = xerc.bumbles.raw$Private
+  )
+```
+
+Remove original raw data from environment
+```{r}
+rm(gbif.bumbles.raw)
+rm(xerc.bumbles.raw)
+rm(irc.bumbles.raw)
+```
+
+## Reformat data types
+Dates to dates
+IRC Dates need to be manually run through as they're in a fucking state...
+```{r}
+gbif.bumbles$date <- as.Date(gbif.bumbles$date, "%Y/%m/%d")
+xerc.bumbles$date <- as.Date(xerc.bumbles$date, "%m/%d/%Y")
+```
+
+Extract m/d/y to columns
+```{r}
+gbif.bumbles$day <- format(as.Date(gbif.bumbles$date), "%d")
+gbif.bumbles$month <- format(as.Date(gbif.bumbles$date), "%m")
+gbif.bumbles$year <- format(as.Date(gbif.bumbles$date), "%Y")
+
+xerc.bumbles$day <- format(as.Date(xerc.bumbles$date), "%d")
+xerc.bumbles$month <- format(as.Date(xerc.bumbles$date), "%m")
+xerc.bumbles$year <- format(as.Date(xerc.bumbles$date), "%Y")
+```
+
+Standardize species across datasets
+```{r}
+xerc.bumbles$species <- paste(xerc.bumbles$genus,
+                              xerc.bumbles$species,
+                              sep = " ")
+```
+
+```{r}
+xerc.bumbles$id_to_taxon <- ifelse(grepl("sp.",
+                                         xerc.bumbles$species),
+                                   "GENUS",
+                                   "SPECIES")
+```
+
+## Filter out incomplete data
+### Need lat/long
+```{r}
+ngbif.before <- nrow(gbif.bumbles)
+gbif.bumbles <- gbif.bumbles %>%
+  filter(!is.na(dec_lat) & !is.na(dec_long)) %>%
+  filter(dec_long < 0 & dec_long > -174)
+ngbif.after <- nrow(gbif.bumbles)
+diff <- ngbif.before - ngbif.after
+paste0("Difference of: " , diff, " records.")
+```
+
+```{r}
+nxerc.before <- nrow(xerc.bumbles)
+xerc.bumbles <- xerc.bumbles %>%
+  filter(!is.na(dec_lat) & !is.na(dec_long)) %>%
+  filter(state != "Alaska")
+nxerc.after <- nrow(xerc.bumbles)
+diff <- nxerc.before - nxerc.after
+paste0("Difference of: " , diff, " records.")
+```
+
+### Need ID to species
+```{r}
+ngbif.before <- nrow(gbif.bumbles)
+gbif.bumbles <- gbif.bumbles %>%
+  filter(id_to_taxon == "SPECIES")
+ngbif.after <- nrow(gbif.bumbles)
+diff <- ngbif.before - ngbif.after
+paste0("Difference of: " , diff, " records.")
+```
+
+```{r}
+nxerc.before <- nrow(xerc.bumbles)
+xerc.bumbles <- xerc.bumbles %>%
+  filter(id_to_taxon == "SPECIES")
+nxerc.after <- nrow(xerc.bumbles)
+diff <-  nxerc.before - nxerc.after
+paste0("Difference of: " , diff, " records.")
+```
+
+## Spatial record association
+```{r}
+census.code <- read_csv("./national_county_code.txt",
+                        col_names = c("state",
+                                      "statefp",
+                                      "countyfp",
+                                      "countyname",
+                                      "classfp"))
+state.abbs <- tibble(abbreviation = state.abb, 
+                     name = state.name,
+                     region = state.region)
+gbif.latlong <- tibble(gbif.bumbles$dec_long,
+                       gbif.bumbles$dec_lat)
+gbif.bumble.points <- SpatialPoints(gbif.latlong)
+
+us.counties <- readOGR("./USCounties_Shapefile/", 
+                       "cb_2015_us_county_5m")
+proj4string(gbif.bumble.points) <- proj4string(us.counties)
+```
+
+Determine county/state for GBIF
+```{r}
+gbif.bumbles$county <- over(gbif.bumble.points, us.counties)$NAME
+gbif.bumbles$state <- over(gbif.bumble.points, us.counties)$STATEFP
+gbif.bumbles$state <- census.code$state[match(as.vector(gbif.bumbles$state),
+                                              census.code$statefp)]
+
+gbif.bumbles <- gbif.bumbles %>%
+  filter(state != "AK" & state != "HI")
+
+plot(gbif.bumble.points)
+```
+
+Determine county for BBWatch
+```{r}
+xerc.latlong <- tibble(xerc.bumbles$dec_long,
+                       xerc.bumbles$dec_lat)
+xerc.bumble.points <- SpatialPoints(xerc.latlong)
+proj4string(xerc.bumble.points) <- proj4string(us.counties)
+xerc.bumbles$county <- over(xerc.bumble.points, us.counties)$NAME
+```
+
+Replace state names in bumble bee watch with state abbreviations
+```{r}
+xerc.bumbles$state <- state.abbs$abbreviation[match(as.vector(xerc.bumbles$state),
+                                                    state.abbs$name)]
+```
+
+## Combine GBIF and BBWatch records to single data frame
+```{r}
+all.bumbles.df <- bind_rows(gbif.bumbles, xerc.bumbles) %>%
+  mutate(state_abb = state,
+         state = abbr2state(state))
+all.bumbles.df$unique.id <- seq(from = 1,
+                             to = nrow(all.bumbles.df))
+all.bumbles.df$region <- state.abbs$region[match(as.vector(all.bumbles.df$state),
+                                               state.abbs$abbreviation)]
+```
+
+### Save output 
+This is the filtered, cleaned data of individual bumble bee records for lower 48
+```{r}
+write_csv(all.bumbles.df,
+          "./data/all_bumbles.csv")
+```
+
+## Filter to study region
+```{r}
+study.bumbles.df <- all.bumbles.df %>%
+  filter(state_abb %in% c("MN", # Filter to upper midwest/great lakes states
+                      "WI", 
+                      "IL",
+                      "MI",
+                      "IN", 
+                      "IA"))
+```
+
+### Save output
+This is the filtered, cleaned data of individual bumble bee records for study region
+```{r}
+write_csv(study.bumbles.df,
+          "./data/study_bumbles.csv")
+```
+
+# PREP DATA FOR MODEL
+## Bin records to closest ag census year
+```{r}
+agyears <- unique(agvars.df$year)
+years <- as.numeric(study.bumbles.df$year)
+
+bin.ag.list <- list()
+for (i in 1:length(years)) {
+  x <- tibble(bin_ag_index = which.min(abs(years[[i]] - agyears)))
+  bin.ag.list[[i]] <- x
+}
+
+bin.ag.df <- bind_rows(bin.ag.list)
+
+study.bumbles.df <- study.bumbles.df %>%
+  filter(!is.na(year)) %>%
+  bind_cols(bin.ag.df) %>%
+  mutate(year = as.numeric(year),
+         bin_ag = case_when(bin_ag_index == 1 ~ agyears[1],
+                            bin_ag_index == 2 ~ agyears[2],
+                            bin_ag_index == 3 ~ agyears[3],
+                            bin_ag_index == 4 ~ agyears[4],
+                            bin_ag_index == 5 ~ agyears[5],
+                            bin_ag_index == 6 ~ agyears[6],
+                            bin_ag_index == 7 ~ agyears[7],
+                            bin_ag_index == 8 ~ agyears[8],
+                            bin_ag_index == 9 ~ agyears[9],
+                            bin_ag_index == 10 ~ agyears[10],
+                            bin_ag_index == 11 ~ agyears[11],
+                            bin_ag_index == 12 ~ agyears[12],
+                            bin_ag_index == 13 ~ agyears[13],
+                            bin_ag_index == 14 ~ agyears[14],
+                            bin_ag_index == 15 ~ agyears[15],
+                            bin_ag_index == 16 ~ agyears[16],
+                            bin_ag_index == 17 ~ agyears[17],
+                            bin_ag_index == 18 ~ agyears[18],
+                            bin_ag_index == 19 ~ agyears[19]),
+         year.diff = abs(year - bin_ag))
+
+table(study.bumbles.df$year.diff)
+```
+
+## Calculate relative abundance by county
+### Full dataset
+```{r}
+analysis.bumbles.df <- study.bumbles.df %>%
+  group_by(species, county, state, bin_ag) %>%
+  summarise(species.abun = n()) %>%
+  ungroup() %>%
+  left_join(study.bumbles.df %>%
+              group_by(county, state, bin_ag) %>%
+              summarise(bumble.abun = n()),
+            by = c("state" = "state",
+                   "county" = "county",
+                   "bin_ag" = "bin_ag")) %>%
+  mutate(rel_abun = species.abun / bumble.abun) %>%
+  filter(bumble.abun >= 5)
+```
+
+### Filtered dataset (coll x loc x spp x date)
+```{r}
+study.bumbles.red.df <- study.bumbles.df %>%
+  mutate(unique_event = paste(collector,
+                              species,
+                              date,
+                              paste(dec_lat,
+                                    dec_long,
+                                    sep = ","),
+                              sep = ":")) %>%
+  distinct(unique_event, .keep_all = TRUE)
+
+analysis.2.bumbles.df <- study.bumbles.red.df %>%
+  group_by(species, county, state, bin_ag) %>%
+  summarise(species.abun = n()) %>%
+  ungroup() %>%
+  left_join(study.bumbles.red.df %>%
+              group_by(county, state, bin_ag) %>%
+              summarise(bumble.abun = n()),
+            by = c("state" = "state",
+                   "county" = "county",
+                   "bin_ag" = "bin_ag")) %>%
+  mutate(rel_abun = species.abun / bumble.abun) %>%
+  filter(bumble.abun >= 5)
+```
+
+### Filtered dataset (coll x loc x spp x date)
+```{r}
+study.bumbles.reddate.df <- study.bumbles.df %>%
+  filter(year.diff <= 3)
+
+analysis.3.bumbles.df <- study.bumbles.reddate.df %>%
+  group_by(species, county, state, bin_ag) %>%
+  summarise(species.abun = n()) %>%
+  ungroup() %>%
+  left_join(study.bumbles.reddate.df %>%
+              group_by(county, state, bin_ag) %>%
+              summarise(bumble.abun = n()),
+            by = c("state" = "state",
+                   "county" = "county",
+                   "bin_ag" = "bin_ag")) %>%
+  mutate(rel_abun = species.abun / bumble.abun) %>%
+  filter(bumble.abun >= 5)
+```
+
+## Save output
+```{r}
+write_csv(analysis.bumbles.df,
+          "./data/analysis_bumbles.csv")
+write_csv(analysis.2.bumbles.df,
+          "./data/analysis_2_bumbles.csv")
+write_csv(analysis.3.bumbles.df,
+          "./data/analysis_3_bumbles.csv")
+```
+

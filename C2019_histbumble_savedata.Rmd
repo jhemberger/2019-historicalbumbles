@@ -1,0 +1,107 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "Save csvs for Shiny app"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# IMPORT PACKAGES
+```{r}
+library(tidyverse)
+library(openintro)
+```
+
+# SAVE CSVs
+```{r}
+# Ag stats
+agvar.export.df <- midwestag.vars.df %>%
+  mutate(state_name = abbr2state(state)) %>%
+  left_join(midwestag.othervars2.df %>%
+              mutate(state_name = abbr2state(state_name)) %>%
+              select(year, state_name, county_name, prop_pasture, prop_pest, prop_cc),
+            by = c("year" = "year",
+                   "state_name" = "state_name",
+                   "county" = "county_name"))
+sum(is.na(midwestag.othervars2.df$prop_cc))
+write_csv(agvar.export.df,
+          "./r_data_archive/agvars.csv")
+
+# Bumble predictions
+write_csv(bumblepred.df,
+          "./r_data_archive/bumblepred.csv")
+
+## As a geoJSON
+install.packages("geojsonio")
+library("geojsonio")
+bumblepred.df <- bumblepred.df %>%
+  mutate(state_full = abbr2state(state)) %>%
+  left_join(countycode.df,
+            by = c("state_full" = "state",
+                   "county" = "county_name")) %>%
+
+bumblepred.spdf <- sp::merge(midwest.spdf,
+                                  bumblepred.df,
+                                  by = "GID_2",
+                                  duplicateGeoms = TRUE)
+countyfips.df <- read_csv("./ctyfips.csv")
+bumblepred.df %>%
+  filter(year == 2012) %>%
+  left_join(countyfips.df,
+            by = c("state_full" = "sname",
+                   "county" = "cname"))
+  write_csv("./r_data_archive/bumblepred2012.csv")
+plot(bumblepred.spdf)
+bumblepred.json <- geojson_json(bumblepred.spdf, type = "skip")
+
+# Coefs
+coefs.df <- bind_rows(models.1870.2018.df,
+                      models.1982.2018.df)
+write_csv(coefs.df,
+          "./r_data_archive/coefs.csv")
+
+# County range trends
+write_csv(spatial.bumbles.range.df,
+          "./r_data_archive/countytrends.csv")
+write_csv(glms.range.df,
+          "./r_data_archive/countycoefs.csv")
+```
+
+```{r}
+install.packages("leaflet")
+library(leaflet)
+
+pal <- colorFactor("inferno", NULL)
+
+bumblepred.spdf <- bumblepred.spdf[!is.na(bumblepred.spdf$year), ]
+bumblepred2012.spdf <- bumblepred.spdf[bumblepred.spdf$year == 2012, ]
+bumblepred2012aff.spdf <- bumblepred2012.spdf[bumblepred2012.spdf$species == "Bombus terricola", ]
+bumblepred2012.spdf$prob_brks <- as.characterbumblepred
+
+bumblepredred.sf <- bumblepred.sf %>%
+  filter(year %in% c(1850,
+                     1880,
+                     1900,
+                     1950, 
+                     1974, 
+                     2012))
+
+st_write(bumblepredred.sf, "./r_data_archive/bumblepred.gpkg", append = FALSE)
+
+leaflet(bumblepred2012aff.spdf) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(stroke = FALSE,
+              smoothFactor = 0.3,
+              fillOpacity = 1,
+              fillColor = ~pal(prob_brks),
+              label = ~paste0(county, ":", formatC(rel_abun, big.mark = ","))) %>%
+  addLegend(pal = pal, 
+            values = ~prob_brks, 
+            opacity = 1,
+            title = "Probability of occurrence")
+
+```
+

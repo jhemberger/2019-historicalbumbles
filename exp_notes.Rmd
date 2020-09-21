@@ -241,3 +241,5 @@ Talked with Tim about modeling in the paper, and re-ran spatial autocorrelation 
 Will need to make new figures amnd tables and depict model difference in the figs.  Coef's are still comparable.  Ultimately, using spatial models will adjust the confidence interval and hypothesis test, not the parameters estimates.  
 
 I think the better way to test for spatial autocorr, is to take, for each species, the ag census year with the *most* counties and test there.  If present, then use spatial model for that species.  
+
+__September 21, 2020:__

@@ -16,6 +16,7 @@ library(nlme)
 library(broom.mixed)
 library(interactions)
 library(janitor)
+library(huxtable)
 library(ggpubr)
 library(tidyverse)
 ```

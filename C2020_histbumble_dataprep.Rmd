@@ -24,6 +24,9 @@ Here, the intent is to take data of cleaned bumble bee occurrence records and su
 `analysis.bumbles.df` <- full dataset, all county records
 `analysis.2.bumbles.df` <- reduced dataset, filtered to unique collection events
 `analysis.3.bumbles.df` <- reduced dataset, filtered to +/- 3 years from ag census year
+`model.bumbles.df` <- full dataset, with ag stats appended
+`model.2.bumbles.df` <- unique collection events, with ag stats appended
+`model.3.bumbles.df` <- reduced time bin, with ag stats appended
 
 # LOAD PACKAGES
 ```{r}
@@ -46,7 +49,27 @@ gbif.bumbles.raw <- read_tsv("./gbif_bumbles_2018.csv",
 xerc.bumbles.raw <- read_csv("./bbw_us_5sept2018.csv",
                              col_names = TRUE,
                              na = "NA")
-agvars.df <- read_csv("./data/midwest_agstats.csv")
+```
+
+## Load ag data
+```{r}
+agvars.df <- read_csv("./data/midwest_agstats.csv") %>%
+  mutate(state_abb = state,
+         state = abbr2state(state))
+
+agvars.other.df <- read_csv("./data/midwest_agstats_other.csv",
+                            guess_max = 5000) %>%
+  dplyr::select(year, state = state_name, county = county_name, pastureac, pestac) %>%
+  mutate(state_abb = state2abbr(state))
+
+agvars.other.df <- agvars.other.df %>%
+  left_join(midwestag.countysize.df, ###CHANGE THIS TO LEFT JOIN 
+            by = c("state_abb" = "state",
+                   "county" = "county")) %>%
+  mutate(prop_pasture = pastureac / area_acres,
+         prop_pest = pestac / area_acres) %>% 
+  filter(!county %in% c("Wisconsin", "Iowa", "Illinois", "Indiana", "Michigan", "Minnesota"))
+  
 ```
 
 # DATA WRANGLING
@@ -127,7 +150,6 @@ Remove original raw data from environment
 ```{r}
 rm(gbif.bumbles.raw)
 rm(xerc.bumbles.raw)
-rm(irc.bumbles.raw)
 ```
 
 ## Reformat data types
@@ -267,10 +289,11 @@ all.bumbles.df$region <- state.abbs$region[match(as.vector(all.bumbles.df$state)
 This is the filtered, cleaned data of individual bumble bee records for lower 48
 ```{r}
 write_csv(all.bumbles.df,
-          "./data/all_bumbles.csv")
+          "./data/all_bumbles.csv", 
+          append = FALSE)
 ```
 
-## Filter to study region
+## Filter to study region and species 
 ```{r}
 study.bumbles.df <- all.bumbles.df %>%
   filter(state_abb %in% c("MN", # Filter to upper midwest/great lakes states
@@ -278,7 +301,20 @@ study.bumbles.df <- all.bumbles.df %>%
                       "IL",
                       "MI",
                       "IN", 
-                      "IA"))
+                      "IA")) %>%
+  filter(species %in% c("Bombus affinis",
+               "Bombus auricomus",
+               "Bombus bimaculatus",
+               "Bombus borealis",
+               "Bombus citrinus",
+               "Bombus fervidus",
+               "Bombus griseocollis",
+               "Bombus impatiens",
+               "Bombus pensylvanicus",
+               "Bombus rufocinctus",
+               "Bombus ternarius",
+               "Bombus terricola",
+               "Bombus vagans"))
 ```
 
 ### Save output
@@ -395,10 +431,63 @@ analysis.3.bumbles.df <- study.bumbles.reddate.df %>%
 ## Save output
 ```{r}
 write_csv(analysis.bumbles.df,
-          "./data/analysis_bumbles.csv")
+          "./data/analysis_1_bumbles.csv", 
+          append = FALSE)
 write_csv(analysis.2.bumbles.df,
-          "./data/analysis_2_bumbles.csv")
+          "./data/analysis_2_bumbles.csv", 
+          append = FALSE)
 write_csv(analysis.3.bumbles.df,
-          "./data/analysis_3_bumbles.csv")
+          "./data/analysis_3_bumbles.csv", 
+          append = FALSE)
+```
+
+# APPEND AG STATS
+## Append
+```{r}
+model.bumbles.df <- analysis.bumbles.df %>%
+  left_join(agvars.df,
+            by = c("state" = "state", 
+                   "county" = "county", 
+                   "bin_ag" = "year")) %>%
+  left_join(agvars.other.df %>%
+              dplyr::select(year, state, county, prop_pasture, prop_pest),
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county"))
+
+model.2.bumbles.df <- analysis.2.bumbles.df %>%
+  left_join(agvars.df,
+            by = c("state" = "state", 
+                   "county" = "county", 
+                   "bin_ag" = "year")) %>%
+  left_join(agvars.other.df %>%
+              dplyr::select(year, state, county, prop_pasture, prop_pest),
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county"))
+
+model.3.bumbles.df <- analysis.3.bumbles.df %>%
+  left_join(agvars.df,
+            by = c("state" = "state", 
+                   "county" = "county", 
+                   "bin_ag" = "year")) %>%
+  left_join(agvars.other.df %>%
+              dplyr::select(year, state, county, prop_pasture, prop_pest),
+            by = c("bin_ag" = "year",
+                   "state" = "state",
+                   "county" = "county"))
+```
+
+## Save output
+```{r}
+write_csv(model.bumbles.df,
+          "./data/model_1_bumbles.csv", 
+          append = FALSE)
+write_csv(model.2.bumbles.df,
+          "./data/model_2_bumbles.csv", 
+          append = FALSE)
+write_csv(model.3.bumbles.df,
+          "./data/model_3_bumbles.csv", 
+          append = FALSE)
 ```
 

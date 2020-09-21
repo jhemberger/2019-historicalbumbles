@@ -12,18 +12,23 @@ output: html_notebook
 # LOAD PACKAGES
 ```{r}
 library(jtools)
+library(nlme)
 library(broom.mixed)
 library(interactions)
 library(janitor)
+library(ggpubr)
 library(tidyverse)
 ```
 
 
 # LOAD DATA
 ```{r}
-model.vars.df <- read_csv("./data/bumble_model_vars.csv")
-model.vars.red.df <- read_csv()
-model.vars.3yr.df <- read_csv()
+model.vars.df <- read_csv("./data/model_1_bumbles.csv") %>%
+  rename(bumble_abun = bumble.abun)
+model.vars.uniq.df <- read_csv("./data/model_2_bumbles.csv") %>%
+  rename(bumble_abun = bumble.abun)
+model.vars.3yr.df <- read_csv("./data/model_3_bumbles.csv") %>%
+  rename(bumble_abun = bumble.abun)
 ```
 
 # PREP DATA
@@ -36,9 +41,8 @@ species.df.list <- model.vars.df %>%
 names(species.df.list) <- species.list
 ```
 
-# MODELS
-## Full model
-### Fit
+# MODEL
+## Function: fit models
 ```{r}
 fit.glms <- function(data) {
   glm.df.list <- list()
@@ -48,38 +52,392 @@ fit.glms <- function(data) {
       filter(species == species.list[[i]])
     glm <- glm(rel_abun ~ prop_cropland*n_crops*bin_ag,
                data = model.df,
-               weights = model.df$bin_ag_abundance,
+               weights = bumble_abun,
                na.action = na.exclude,
                family = binomial(link = "logit")) 
     glm.list[[i]] <- glm
-    glm.df <- tidy(glm) %>%
-      mutate(n_records = nrow(model.df),
-             species = unique(model.df$species),
-             r2 = broom::glance(summ(glm))$pseudo.r.squared.mcfadden) %>%
-      dplyr::select(species,
-                    term, 
-                    n_records,
-                    r2,
-                    everything())
-    glm.df.list[[i]] <- glm.df
+    # glm.df <- tidy(glm) %>%
+    #   mutate(n_records = nrow(model.df),
+    #          species = unique(model.df$species),
+    #          r2 = broom::glance(summ(glm))$pseudo.r.squared.mcfadden) %>%
+    #   dplyr::select(species,
+    #                 term, 
+    #                 n_records,
+    #                 r2,
+    #                 everything())
+    # glm.df.list[[i]] <- glm.df
   }
   names(glm.list) <- species.list
-  glms.df <- bind_rows(glm.df.list)
+  # glms.df <- bind_rows(glm.df.list)
 
-  end.list <- list(full.model.list = glm.list, full.model.df = glms.df)
-  return(end.list)
+  # end.list <- list(full.model.list = glm.list, full.model.df = glms.df)
+  return(glm.list)
 }
-
-full.models.list <- fit.glms(data = model.vars.df)
 ```
 
-### Scale and extract
-## Filtered observations
-### Fit
+## Function: scale and extract
+```{r}
+scale_coefs <- function(model.list) {
+  df.list <- list()
+  for (i in 1:length(model.list)) {
+    species <- names(model.list[i])
+    summ.glm <- summ(model.list[[i]],
+                     scale = TRUE,
+                     confint = TRUE)
+    # print(summ.glm)
+    glm.df <- as.data.frame(summ.glm[["coeftable"]]) %>%
+      mutate(term = c("(Intercept)",
+                      "prop_cropland",
+                      "n_crops",
+                      "bin_ag",
+                      "prop_cropland:n_crops",
+                      "prop_cropland:bin",
+                      "n_crops:bin_ag",
+                      "prop_cropland:n_crops:bin_ag")) %>%
+      dplyr::select("term" = "term",
+                    "estimate" = "Est.",
+                    "lower.ci" = "2.5%",
+                    "upper.ci" = "97.5%",
+                    "z.stat" = "z val.",
+                    "p.value" = "p") %>%
+      mutate(species = species,
+             sample.size = length(summ.glm$model$y),
+             r2 = broom::glance(summ(model.list[[i]]))$pseudo.r.squared.mcfadden,
+             p.value = ifelse(p.value < 0.001,
+                              "< 0.001",
+                              round(p.value,
+                                    digits = 3)),
+             estimate = round(estimate,
+                              digits = 3),
+             lower.ci = round(lower.ci,
+                              digits = 4),
+             upper.ci = round(upper.ci,
+                              digits = 4)) %>%
+      dplyr::select(species, sample.size, everything())
+    # print(glm.df)
+    df.list[[i]] <- glm.df
+  }
+  glms.df <- bind_rows(df.list)
+  scaled.model.list <- list(scaled.glms.df = glms.df)
+  return(scaled.model.list)
+}
+```
 
-### Scale and extract
+## Function: visualize interactions
+```{r}
+plot.interx <- function(model.list) {
+  plot.list <- list()
+  slope.test.list <- list()
+  slope.list <- list()
+  table.list <- list()
+  for (i in 1:length(model.list)) {
+    plot <- interactions::interact_plot(model.list[[i]],
+                                        pred = bin_ag,
+                                        modx = n_crops,
+                                        mod2 = prop_cropland,
+                                        outcome.scale = "response",
+                                        interval = TRUE,
+                                        x.label = "Year",
+                                        y.label = "Probability of occurrence",
+                                        modx.labels = c("Mean crops - 1 S.D.",
+                                                        "Mean crops",
+                                                        "Mean crops + 1 S.D."),
+                                        mod2.labels = c("Mean cropland - 1 S.D.",
+                                                        "Mean cropland",
+                                                        "Mean cropland + 1 S.D.")) +
+      
+      scale_y_continuous(limits = c(0, 1),
+                         breaks = seq(0, 1, by = 0.25)) +
+      scale_x_continuous(limits = c(1880, 2020),
+                         breaks = seq(1880, 2020, by = 40))
+      theme_nice() + 
+      theme(legend.position = "none")
+      slope.test <- interactions::sim_slopes(model.list[[i]],
+                                             pred = bin_ag,
+                                             modx = n_crops,
+                                             mod2 = prop_cropland,
+                                             interval = TRUE,
+                                             modx.labels = c("Mean crops - 1 S.D.",
+                                                             "Mean crops",
+                                                             "Mean crops + 1 S.D."),
+                                             mod2.labels = c("Mean cropland - 1 S.D.",
+                                                             "Mean cropland",
+                                                             "Mean cropland + 1 S.D."))
+    slope.plot <- plot(slope.test)
+    slope.table <- as_huxtable(slope.test)
+    
+    plot.list[[i]] <- plot
+    slope.test.list[[i]] <- slope.test
+    slope.list[[i]] <- slope.plot
+    table.list[[i]] <- slope.table
+    print(plot)
+  }
+  names(plot.list) <- species.list
+  names(slope.test.list) <- species.list
+  names(slope.list) <- species.list
+  names(table.list) <- species.list
+  interactions.full.list <- list(plots = plot.list,
+                                 slope.tests = slope.test.list,
+                                 slopes = slope.list,
+                                 tables = table.list)
+  return(interactions.full.list)
+}
+```
 
-## `bin_ag` window
-### Fit
+## Run Models
+#### Fit
+```{r}
+models.full.list <- fit.glms(data = model.vars.df)
+models.uniq.list <- fit.glms(data = model.vars.uniq.df)
+models.3yr.list <- fit.glms(data = model.vars.df)
+```
 
-### Scale and extract
+#### Scale and extract
+```{r}
+scaled.models.full.list <- scale_coefs(models.full.list)
+scaled.model.uniq.list <- scale_coefs(models.uniq.list)
+scaled.model.3yr.list <- scale_coefs(models.3yr.list)
+```
+
+#### Visualize interactions
+```{r}
+interactions.full.list <- plot.interx(models.full.list)
+interactions.uniq.list <- plot.interx(models.uniq.list)
+interactions.3yr.list <- plot.interx(models.3yr.list)
+```
+
+# EXPORT INTERACTION FIGURES
+## Plot stack function
+```{r}
+export.plots <- function(plots, species, export.name) {
+  print(export.name)
+  export.plot <- ggarrange(plots$species[1],
+                           plots$species[2],
+                           plots$species[3],
+                           nrow = length(species),
+                           common.legend = TRUE)
+  ggsave(export.name,
+         export.plot)
+}
+```
+
+## Species groups
+### Interaction plots
+```{r}
+full.model.intx.spp <- list(
+  common.spp = interactions.full.list$plots[c("Bombus bimaculatus",
+                                               "Bombus griseocollis",
+                                               "Bombus impatiens")],
+  consv.spp = interactions.full.list$plots[c("Bombus affinis",
+                                              "Bombus pensylvanicus",
+                                              "Bombus terricola")],
+  other.spp = interactions.full.list$plots[c("Bombus auricomus",
+                                              "Bombus borealis",
+                                              "Bombus citrinus",
+                                              "Bombus fervidus",
+                                              "Bombus rufocinctus",
+                                              "Bombus ternarius",
+                                              "Bombus vagans")],
+  common.uniq.spp = interactions.uniq.list$plots[c("Bombus bimaculatus",
+                                                    "Bombus griseocollis",
+                                                    "Bombus impatiens")],
+  consv.uniq.spp = interactions.uniq.list$plots[c("Bombus affinis",
+                                                   "Bombus pensylvanicus",
+                                                   "Bombus terricola")],
+  other.uniq.spp = interactions.uniq.list$plots[c("Bombus auricomus",
+                                                   "Bombus borealis",
+                                                   "Bombus citrinus",
+                                                   "Bombus fervidus",
+                                                   "Bombus rufocinctus",
+                                                   "Bombus ternarius",
+                                                   "Bombus vagans")],
+  common.3yr.spp = interactions.3yr.list$plots[c("Bombus bimaculatus",
+                                                  "Bombus griseocollis",
+                                                  "Bombus impatiens")],
+  consv.3yr.spp = interactions.3yr.list$plots[c("Bombus affinis",
+                                                 "Bombus pensylvanicus",
+                                                 "Bombus terricola")],
+  other.3yr.spp = interactions.3yr.list$plots[c("Bombus auricomus",
+                                                 "Bombus borealis",
+                                                 "Bombus citrinus",
+                                                 "Bombus fervidus",
+                                                 "Bombus rufocinctus",
+                                                 "Bombus ternarius",
+                                                 "Bombus vagans")])
+```
+
+### Interaction sig. plots
+```{r}
+full.model.slope.spp <- list(
+  common.spp = interactions.full.list$slopes[c("Bombus bimaculatus",
+                                               "Bombus griseocollis",
+                                               "Bombus impatiens")],
+  consv.spp = interactions.full.list$slopes[c("Bombus affinis",
+                                              "Bombus pensylvanicus",
+                                              "Bombus terricola")],
+  other.spp = interactions.full.list$slopes[c("Bombus auricomus",
+                                              "Bombus borealis",
+                                              "Bombus citrinus",
+                                              "Bombus fervidus",
+                                              "Bombus rufocinctus",
+                                              "Bombus ternarius",
+                                              "Bombus vagans")],
+  common.uniq.spp = interactions.uniq.list$slopes[c("Bombus bimaculatus",
+                                                    "Bombus griseocollis",
+                                                    "Bombus impatiens")],
+  consv.uniq.spp = interactions.uniq.list$slopes[c("Bombus affinis",
+                                                   "Bombus pensylvanicus",
+                                                   "Bombus terricola")],
+  other.uniq.spp = interactions.uniq.list$slopes[c("Bombus auricomus",
+                                                   "Bombus borealis",
+                                                   "Bombus citrinus",
+                                                   "Bombus fervidus",
+                                                   "Bombus rufocinctus",
+                                                   "Bombus ternarius",
+                                                   "Bombus vagans")],
+  common.3yr.spp = interactions.3yr.list$slopes[c("Bombus bimaculatus",
+                                                  "Bombus griseocollis",
+                                                  "Bombus impatiens")],
+  consv.3yr.spp = interactions.3yr.list$slopes[c("Bombus affinis",
+                                                 "Bombus pensylvanicus",
+                                                 "Bombus terricola")],
+  other.3yr.spp = interactions.3yr.list$slopes[c("Bombus auricomus",
+                                                 "Bombus borealis",
+                                                 "Bombus citrinus",
+                                                 "Bombus fervidus",
+                                                 "Bombus rufocinctus",
+                                                 "Bombus ternarius",
+                                                 "Bombus vagans")])
+```
+
+
+## Full
+### Common species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$common.spp,
+          nrow = length(full.model.intx.spp$common.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_common_spp.pdf",
+         width = 6,
+         height = 6)
+```
+
+### Consv. species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$consv.spp,
+          nrow = length(full.model.intx.spp$consv.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_consv_spp.pdf",
+         width = 6,
+         height = 6)
+```
+
+### Other species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$other.spp,
+          nrow = length(full.model.intx.spp$other.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_other_spp.pdf",
+         width = 6,
+         height = 14)
+```
+
+## Filtered
+### Common species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$common.uniq.spp,
+          nrow = length(full.model.intx.spp$common.uniq.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_common_uniq_spp.pdf",
+         width = 6,
+         height = 6)
+```
+
+### Consv. species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$consv.uniq.spp,
+          nrow = length(full.model.intx.spp$consv.uniq.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_consv_uniq_spp.pdf",
+         width = 6,
+         height = 6)
+```
+
+### Other species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$other.uniq.spp,
+          nrow = length(full.model.intx.spp$other.uniq.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_other_uniq_spp.pdf",
+         width = 6,
+         height = 14)
+```
+
+## `bin_ag` windows
+### Common species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$common.3yr.spp,
+          nrow = length(full.model.intx.spp$common.3yr.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_common_3yr_spp.pdf",
+         width = 6,
+         height = 6)
+```
+
+### Consv. species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$consv.3yr.spp,
+          nrow = length(full.model.intx.spp$consv.3yr.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_consv_3yr_spp.pdf",
+         width = 6,
+         height = 6)
+```
+
+### Other species
+```{r}
+ggarrange(plotlist = full.model.intx.spp$other.3yr.spp,
+          nrow = length(full.model.intx.spp$other.3yr.spp),
+          common.legend = TRUE) +
+  ggsave("./model_plots/interactions/1870_other_3yr_spp.pdf",
+         width = 6,
+         height = 14)
+```
+
+# EXPORT SLOPE INFO
+## Common species
+```{r}
+ggarrange(plotlist = full.model.slope.spp$common.spp,
+          nrow = 1) +
+  ggsave("./model_plots/interactions/1870_common_spp_slopes.eps",
+         width = 8,
+         height = 5)
+```
+
+## Consv. species
+```{r}
+ggarrange(plotlist = full.model.slope.spp$consv.spp,
+          nrow = 1) +
+  ggsave("./model_plots/interactions/1870_consv_spp_slopes.eps",
+         width = 8,
+         height = 5)
+```
+
+## Other species
+```{r}
+ggarrange(plotlist = full.model.slope.spp$other.spp,
+          nrow = 1,
+          ncol = 7) +
+  ggsave("./model_plots/interactions/1870_other_spp_slopes.eps",
+         width = 16,
+         height = 5)
+
+# Save slope tables
+for (i in 1:length(interactions.full.list$slope.tests)) {
+  quick_pdf(as_huxtable(interactions.full.list$slope.tests[[i]]) %>%
+              theme_article(),
+            file = paste0("./model_plots/interactions/slope_tables/",
+                          make_clean_names(names(interactions.full.list$slope.tests[i])),
+                          ".pdf"))
+}
+```

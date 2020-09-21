@@ -13,8 +13,11 @@ output: html_notebook
 
 
 # LOAD DATA
+## Ag data
+
+## Bumble bee models
 ```{r}
-glm.output.list <- X
+glm.output.list <- 
 midwestag.model.df <- read_csv("./data/midwestag_model.csv")
 ```
 

@@ -25,7 +25,7 @@ library(tidyverse)
 
 # Load in Mike's proportion ag data
 ```{r}
-histag2.df <- read_tsv("./AgCensus_MasterDataFrame_2020.txt")
+histag2.df <- read_tsv("./data/AgCensus_MasterDataFrame_2020.txt")
 ```
 
 ## Create crop code data frame
@@ -119,7 +119,8 @@ midwestag.countysize.df <- midwestag.bycrop.df %>%
            into = "county") %>%
   mutate(area_acres = area_km * 247.105,
          state_cty = paste(state, county, sep = "_")) %>%
-  distinct(state_cty, .keep_all = TRUE)
+  distinct(state_cty, .keep_all = TRUE) %>%
+  write_csv("./data/midwest_countysize.csv")
 
 # us.countyarea.df <- read_csv("./us_countyarea.csv") 
 # midwest.countyarea.df <- us.countyarea.df %>%
@@ -252,14 +253,20 @@ ggsave("./model_plots/propag_trend.eps",
 
 ## Mechanistic vars (pasture + pesticides)
 ```{r}
-midwestag.othervars2.df <- midwestag.othervars.df %>%
-  left_join(midwestag.countysize.df, ###CHANGE THIS TO LEFT JOIN 
-            by = c("state_name" = "state",
-                   "county_name" = "county")) %>%
+midwestag.othervars2.df <- midwestag.other.df %>%
+  left_join(midwestag.countysize.df %>%
+              mutate(state = abbr2state(state)) %>%
+              mutate(state = tolower(state),
+                     county = tolower(county)), ###CHANGE THIS TO LEFT JOIN 
+            by = c("state" = "state",
+                   "county" = "county")) %>%
   mutate(prop_pasture = pastureac / area_acres,
          prop_pest = pestac / area_acres,
          prop_cc = covercropac / area_acres) %>% 
-  filter(!county_name %in% c("Wisconsin", "Iowa", "Illinois", "Indiana", "Michigan", "Minnesota"))
+  filter(!county_name %in% c("Wisconsin", "Iowa", "Illinois", "Indiana", "Michigan", "Minnesota")) %>%
+  write_csv("./data/midwest_agstats_other.csv", append = FALSE)
+
+unique(midwestag.othervars2.df$prop_pasture)
 ```
 
 ## Combine data
@@ -287,8 +294,68 @@ write_csv(midwestag.vars.df,
 
 ## Visualize other data (From ag census records) 
 ```{r}
+proppast.plot <- midwestag.map.df %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_point(mapping = aes(x = year,
+  #                          y = prop_cropland,
+  #                          color = STATE)) +
+  geom_smooth(mapping = aes(x = year, 
+                           y = prop_pasture,
+                           color = factor(state)),
+              se = FALSE,
+              method = "loess",
+              span = 0.8) + 
+  xlab(label = "Year") +
+  ylab(label = "Proportion agriculture") + 
+  scale_x_continuous(limits = c(1982, 2012)) + 
+  scale_color_manual(values = paste(carto_pal(n = 6, "Fall"), sep = ",")) +
+  theme_minimal()
+proppast.plot
+ggsave("./model_plots/trends/proppast_trend.eps",
+       plot = proppast.plot,
+       height = 3,
+       width = 4)
+```
+
+```{r}
+proppest.plot <- midwestag.map.df %>%
+ggplot() + 
+  # geom_point(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_smooth(mapping = aes(x = year, 
+  #                          y = n_crops,
+  #                          color = STATE)) + 
+  # geom_point(mapping = aes(x = year,
+  #                          y = prop_cropland,
+  #                          color = STATE)) +
+  geom_smooth(mapping = aes(x = year, 
+                           y = prop_pest,
+                           color = factor(state)),
+              se = FALSE,
+              method = "loess",
+              span = 0.8) + 
+  xlab(label = "Year") +
+  ylab(label = "Proportion agriculture") + 
+  scale_x_continuous(limits = c(1982, 2012)) + 
+  scale_color_manual(values = paste(carto_pal(n = 6, "Fall"), sep = ",")) +
+  theme_minimal()
+proppest.plot
+ggsave("./model_plots/trends/proppest_trend.eps",
+       plot = proppest.plot,
+       height = 3,
+       width = 4)
+```
+
+```{r}
 midwestag.othervars.df
-midwestag.othervars.df %>%
+midwestag.othervars2.df %>%
   filter(countyicp != 0) %>%
 ggplot() + 
   # geom_point(mapping = aes(x = year, 
@@ -297,14 +364,14 @@ ggplot() +
   # geom_smooth(mapping = aes(x = year, 
   #                          y = n_crops,
   #                          color = STATE)) + 
-  geom_point(mapping = aes(x = year, 
+  geom_jitter(mapping = aes(x = year, 
                            y = cloverac,
                            color = state_name)) + 
   geom_smooth(mapping = aes(x = year, 
                            y = cloverac,
                            color = state_name),
               method = "loess") + 
-  theme_minimal_hgrid()
+  cowplot::theme_minimal_hgrid()
 midwestag.othervars.df %>%
   filter(countyicp != 0) %>%
 ggplot() + 
@@ -322,7 +389,7 @@ ggplot() +
                            color = state_name),
               method = "loess") + 
   theme_minimal_hgrid()
-midwestag.othervars.df %>%
+midwestag.othervars2.df %>%
   filter(avgfarm < 10000) %>%
 ggplot() + 
   # geom_point(mapping = aes(x = year, 
@@ -331,14 +398,14 @@ ggplot() +
   # geom_smooth(mapping = aes(x = year, 
   #                          y = n_crops,
   #                          color = STATE)) + 
-  geom_point(mapping = aes(x = year, 
+  geom_jitter(mapping = aes(x = year, 
                            y = avgfarm,
                            color = state_name)) + 
   geom_smooth(mapping = aes(x = year, 
                            y = avgfarm,
                            color = state_name),
               method = "loess") + 
-  theme_minimal_hgrid()
+  cowplot::theme_minimal_hgrid()
 ```
 
 # Clean up ag census data

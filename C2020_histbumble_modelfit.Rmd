@@ -42,7 +42,7 @@ species.df.list <- model.vars.df %>%
 names(species.df.list) <- species.list
 ```
 
-# MODEL
+# MODEL: 1870-2017
 ## Function: fit models
 ```{r}
 fit.glms <- function(data) {
@@ -205,6 +205,179 @@ scaled.model.3yr.list <- scale_coefs(models.3yr.list)
 interactions.full.list <- plot.interx(models.full.list)
 interactions.uniq.list <- plot.interx(models.uniq.list)
 interactions.3yr.list <- plot.interx(models.3yr.list)
+```
+
+# MODEL: 1982-2012
+## Function: fit models
+```{r}
+fit.1982.glms <- function(data) {
+  species.list <- list(#"Bombus affinis", 
+                       "Bombus bimaculatus",
+                       "Bombus griseocollis",
+                       "Bombus impatiens",
+                       "Bombus pensylvanicus",
+                       "Bombus terricola")
+  glm.df.list <- list()
+  glm.list <- list()
+  for (i in 1:length(species.list)) {
+    model.df <- data %>%
+      filter(species == species.list[[i]])
+    glm <- glm(rel_abun ~ n_crops + 
+                       prop_pasture + 
+                       prop_pest + 
+                       bin_ag +
+                       prop_pasture:bin_ag +
+                       prop_pest:bin_ag +
+                       n_crops:bin_ag +
+                       n_crops:prop_pest +
+                       n_crops:prop_pasture +
+                       prop_pest:prop_pasture +
+                 prop_pest:prop_pasture:bin_ag:n_crops,
+               data = model.df,
+               weights = bumble_abun,
+               na.action = na.exclude,
+               family = binomial(link = "logit")) 
+    glm.list[[i]] <- glm
+    # glm.df <- tidy(glm) %>%
+    #   mutate(n_records = nrow(model.df),
+    #          species = unique(model.df$species),
+    #          r2 = broom::glance(summ(glm))$pseudo.r.squared.mcfadden) %>%
+    #   dplyr::select(species,
+    #                 term, 
+    #                 n_records,
+    #                 r2,
+    #                 everything())
+    # glm.df.list[[i]] <- glm.df
+  }
+  names(glm.list) <- species.list
+  # glms.df <- bind_rows(glm.df.list)
+
+  # end.list <- list(full.model.list = glm.list, full.model.df = glms.df)
+  return(glm.list)
+}
+```
+
+## Function: scale and extract
+```{r}
+scale.1982.coefs <- function(model.list) {
+  df.list <- list()
+  for (i in 1:length(model.list)) {
+    species <- names(model.list[i])
+    summ.glm <- summ(model.list[[i]],
+                     scale = TRUE,
+                     confint = TRUE)
+    # print(summ.glm)
+    glm.df <- as.data.frame(summ.glm[["coeftable"]]) %>%
+      mutate(term = c("(Intercept)",
+                      "n_crops",
+                      "prop_pasture",
+                      "prop_pest",
+                      "bin_ag",
+                      "prop_pasture:bin_ag",
+                      "prop_pest:bin_ag",
+                      "n_crops:bin_ag",
+                      "n_crops:prop_pest",
+                      "n_crops:prop_pasture",
+                      "prop_pasture:prop_pest")) %>%
+      dplyr::select("term" = "term",
+                    "estimate" = "Est.",
+                    "lower.ci" = "2.5%",
+                    "upper.ci" = "97.5%",
+                    "z.stat" = "z val.",
+                    "p.value" = "p") %>%
+      mutate(species = species,
+             sample.size = length(summ.glm$model$y),
+             r2 = broom::glance(summ(model.list[[i]]))$pseudo.r.squared.mcfadden,
+             p.value = ifelse(p.value < 0.001,
+                              "< 0.001",
+                              round(p.value,
+                                    digits = 3)),
+             estimate = round(estimate,
+                              digits = 3),
+             lower.ci = round(lower.ci,
+                              digits = 4),
+             upper.ci = round(upper.ci,
+                              digits = 4)) %>%
+      dplyr::select(species, sample.size, everything())
+    # print(glm.df)
+    df.list[[i]] <- glm.df
+  }
+  glms.df <- bind_rows(df.list)
+  scaled.model.list <- list(scaled.glms.df = glms.df)
+  return(scaled.model.list)
+}
+
+models.1982.full.list[[1]]
+```
+
+## Function: visualize interactions
+```{r}
+plot.1982.interx <- function(model.list) {
+  plot.list <- list()
+  slope.test.list <- list()
+  slope.list <- list()
+  table.list <- list()
+  for (i in 1:length(model.list)) {
+    plot <- interactions::interact_plot(model.list[[i]],
+                                        pred = bin_ag,
+                                        modx = n_crops,
+                                        mod2 = prop_pasture,
+                                        outcome.scale = "response",
+                                        interval = TRUE,
+                                        x.label = "Year",
+                                        y.label = "Probability of occurrence") +
+      
+      scale_y_continuous(limits = c(0, 1),
+                         breaks = seq(0, 1, by = 0.25)) +
+      scale_x_continuous(limits = c(1982, 2020))
+      theme_nice() + 
+      theme(legend.position = "none")
+      slope.test <- interactions::sim_slopes(model.list[[i]],
+                                             pred = bin_ag,
+                                             modx = n_crops,
+                                             mod2 = prop_pasture,
+                                             interval = TRUE)
+    slope.plot <- plot(slope.test)
+    slope.table <- as_huxtable(slope.test)
+    
+    plot.list[[i]] <- plot
+    slope.test.list[[i]] <- slope.test
+    slope.list[[i]] <- slope.plot
+    table.list[[i]] <- slope.table
+    print(plot)
+  }
+  names(plot.list) <- species.list
+  names(slope.test.list) <- species.list
+  names(slope.list) <- species.list
+  names(table.list) <- species.list
+  interactions.full.list <- list(plots = plot.list,
+                                 slope.tests = slope.test.list,
+                                 slopes = slope.list,
+                                 tables = table.list)
+  return(interactions.full.list)
+}
+```
+
+## Run Models
+#### Fit
+```{r}
+models.1982.full.list <- fit.1982.glms(data = model.vars.df)
+models.1982.uniq.list <- fit.1982.glms(data = model.vars.uniq.df)
+models.1982.3yr.list <- fit.1982.glms(data = model.vars.df)
+```
+
+#### Scale and extract
+```{r}
+scaled.1982.models.full.list <- scale.1982.coefs(models.1982.full.list)
+scaled.1982.model.uniq.list <- scale.1982.coefs(models.1982.uniq.list)
+scaled.1982.model.3yr.list <- scale.1982.coefs(models.1982.3yr.list)
+```
+
+#### Visualize interactions
+```{r}
+interactions.1982.full.list <- plot.1982.interx(models.1982.full.list)
+interactions.1982.uniq.list <- plot.interx(models.1982.uniq.list)
+interactions.1982.3yr.list <- plot.interx(models.1982.3yr.list)
 ```
 
 # EXPORT INTERACTION FIGURES
@@ -442,3 +615,10 @@ for (i in 1:length(interactions.full.list$slope.tests)) {
                           ".pdf"))
 }
 ```
+
+# EXPORT MODEL TABLES
+```{r}
+scaled.models.full.list$scaled.glms.df %>%
+  write_csv("./model_output/1870_full_model.csv")
+```
+

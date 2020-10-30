@@ -132,7 +132,8 @@ prop.past.plot <- plot.agstat(data = midwestag.map.df,
 prop.pest.plot <- plot.agstat(data = midwestag.map.df,
                               agstat = "prop_pest", 
                               years = c(1982, 1992, 2002, 2012))
-
+# TODO
+# FIXME 
 prop.crop.plot
 n.crop.plot
 prop.past.plot
@@ -310,6 +311,7 @@ plot.predicted()
 
 ## Risk maps
 ### Assign counties to risk
+#### GLMs
 ```{r}
 relabun.analy.list <- relabun.bycty.df %>%
   filter(!species %in% c("Bombus ashtoni",
@@ -318,56 +320,176 @@ relabun.analy.list <- relabun.bycty.df %>%
   group_by(species, state, county) %>%
   group_split()
 
-ctylm.list <- list()
+ctyglm.list <- list()
 for (i in 1:length(relabun.analy.list)) {
-  cty.lm <- lm(rel_abun ~ scale(year),
-               data = relabun.analy.list[[i]])
-  ctylm.df <- tidy(cty.lm) %>%
+  cty.glm <- glm(rel_abun ~ scale(year),
+                data = relabun.analy.list[[i]],
+                family = binomial(link = "logit"))
+  ctyglm.df <- tidy(cty.glm) %>%
     filter(term == "scale(year)") %>%
     mutate(species = relabun.analy.list[[i]]$species[1],
            state = relabun.analy.list[[i]]$state[1],
            county = relabun.analy.list[[i]]$county[1]) %>%
     select(species, state, county, term, estimate, std.error, p.value)
-  ctylm.list[[i]] <- ctylm.df
+  ctyglm.list[[i]] <- ctyglm.df
 }
 
-
-ctylm.df <- bind_rows(ctylm.list)
+ctyglm.df <- bind_rows(ctyglm.list)
 rm(relabun.analy.list)
 rm(ctylm.list)
 ```
 
-##### Assign risk using quantiles
+#### GAMS
 ```{r}
-ctylm.species.list <- ctylm.df %>%
+library(mgcv)
+library(gratia)
+relabun.analy.list <- relabun.bycty.df %>%
+  filter(!species %in% c("Bombus ashtoni",
+                         "Bombus fraternus",
+                         "Bombus variabilis")) %>%
+  group_by(species, state, county) %>%
+  group_split()
+
+ctygam.list <- list()
+for (i in 1:length(relabun.analy.list)) {
+  cty.gam <- mgcv::gam(rel_abun ~ s(year, bs = "cs", k = 3),
+               data = relabun.analy.list[[i]])
+  ctygam.df <- tidy(cty.gam) %>%
+    filter(term == "s(year)") %>%
+    mutate(species = relabun.analy.list[[i]]$species[1],
+           state = relabun.analy.list[[i]]$state[1],
+           county = relabun.analy.list[[i]]$county[1]) %>%
+    select(species, state, county, term, p.value)
+  
+  # Calculate derivative across the range of the smooth
+  fd <- fderiv(cty.gam, term = "year")
+  ci <- confint(fd, type = "confidence")
+  ci <- cbind(ci, x = as.vector(fd[['eval']]))
+  
+  # Calculate average derivative as an indicator of increase/decrease
+  ci.mean <- mean(ci$est, na.rm = TRUE)
+  
+  # Append average slope
+  ctygam.df <- ctygam.df %>%
+    bind_cols(mean.der = ci.mean)
+  ctygam.list[[i]] <- ctygam.df
+}
+
+ctygam.df <- bind_rows(ctygam.list)
+rm(relabun.analy.list)
+rm(ctygam.list)
+```
+
+##### Test GAM
+```{r}
+test.gam <- gam(rel_abun ~ s(year, bs = "cs", k = 3),
+               data = relabun.analy.list[[1]])
+
+relabun.analy.list[[1]] %>%
+  ggplot(mapping = aes(x = year, y = rel_abun)) + 
+  geom_point() +
+  geom_smooth(method = "gam") +
+  theme_histbumbles()
+
+summary(test.gam)
+tidy(test.gam)
+
+devtools::install_github("m-clark/visibly")
+library(visibly)
+
+plot_gam(test.gam, main_var = year)
+
+coef(test.gam)
+
+plot_gam_check(test.gam)
+
+fd <- fderiv(test.gam, term = "year")
+ci <- confint(fd, type = "confidence")
+ci <- cbind(ci, x = as.vector(fd[['eval']]))
+
+ci %>%
+  summarise(mean = mean(est))
+ggplot(ci, aes(x = year, y = est)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3) +
+  geom_line()
+```
+
+
+#### Assign risk using quantiles
+##### Species independent
+```{r}
+ctyglm.species.list <- ctyglm.df %>%
   group_by(species) %>%
   group_split()
 
-for (i in 1:length(ctylm.species.list)) {
-  quants <- quantile(x = ctylm.df$estimate,
+for (i in 1:length(ctyglm.species.list)) {
+  quants <- quantile(x = ctyglm.species.list[[i]]$estimate,
                      na.rm = TRUE,
                      type = 1,
-                     probs = seq(0, 1, length.out = 5)) %>%
+                     probs = seq(0, 1, length.out = 6)) %>%
     as.vector()
+  print(quants)
   labels <- imap_chr(quants, function(., idx){
     return(paste0(round(quants[idx], 3),
                   "–",
                   round(quants[idx + 1], 3)))
   })
   labels <- labels[1:length(labels) - 1]
-  ctylm.species.list[[i]]$risk_brks <- cut(ctylm.species.list[[i]]$estimate,
-                            breaks = quants,
-                            include.lowest = TRUE,
-                            labels = ctytrend.labels)
+  print(labels)
+  ctyglm.species.list[[i]]$risk_brks <- cut(ctyglm.species.list[[i]]$estimate,
+                                            breaks = quants,
+                                            include.lowest = TRUE,
+                                            labels = labels)
 }
-ctylm.risk.df <- bind_rows(ctylm.species.list)
-rm(ctylm.species.list)
+
+ctylm.risk.df <- bind_rows(ctyglm.species.list)
+rm(ctyglm.species.list)
+```
+
+##### Standardized across species
+```{r}
+risk.df <- ctyglm.df %>%
+  filter(species %in% c("Bombus affinis", "Bombus bimaculatus", "Bombus griseocollis", 
+                        "Bombus impatiens","Bombus pensylvanicus", "Bombus terricola"))
+quants <- quantile(x = risk.df$estimate,
+                   na.rm = TRUE,
+                   type = 1,
+                   probs = seq(0, 1, length.out = 5)) %>%
+  as.vector()
+print(quants)
+labels <- imap_chr(quants, function(., idx){
+  return(paste0(round(quants[idx], 3),
+                "–",
+                round(quants[idx + 1], 3)))
+})
+labels <- labels[1:length(labels) - 1]
+print(labels)
+risk.df$risk_brks <- cut(risk.df$estimate,
+                           breaks = quants,
+                           include.lowest = TRUE,
+                           labels = labels)
+```
+
+##### Manual assignment
+```{r}
+risk.df <- ctyglm.df %>%
+  mutate(risk_brks = cut(estimate,
+                         breaks = c(-Inf, -0.1, 0.1, Inf),
+                         include.lowest = TRUE,
+                         labels = c("Decline", "Stable", "Increase")))
+
+# Create breaks with GAM dataframe
+risk.df <- ctygam.df %>%
+  mutate(risk_brks = case_when(p.value < 0.05 & mean.der < 0 ~ "Decline",
+                               p.value < 0.05 & mean.der > 0 ~ "Increase",
+                               p.value > 0.05 ~ "No change"))
 ```
 
 ### Map risk
 ```{r}
-ctylm.df %>% 
-  mutate(risk =  factor(as.numeric(risk_brks))) %>%
+risk.df %>% 
+  mutate(risk =  factor(risk_brks, 
+                        levels = c("Decline", "No change", "Increase"))) %>%
   left_join(ungroup(us.counties),
             by = c("county" = "subregion",
                    "state" = "region")) %>%
@@ -389,10 +511,9 @@ ctylm.df %>%
                color = "#383838",
                size = 1.25,
                fill = NA) +
-  scale_fill_manual(values = c("#EFD53C",
-                               "#B59718",
-                               "#49441A",
-                               "#191716")) +
+  scale_fill_manual(values = rev(c("#EFD53C",
+                                   "#B59718",
+                                   "#191716"))) +
   coord_map("stereographic") +
   facet_wrap(~ species) +
   theme_void() +
@@ -405,29 +526,52 @@ plot.species <- relabun.bycty.df %>%
   filter(!species %in% c("Bombus ashtoni",
                          "Bombus fraternus",
                          "Bombus variabilis")) %>%
+  # filter(state == "wisconsin") %>%
   distinct(species) %>%
   pull(species)
-
+plot.list <- list()
 for (i in plot.species) {
   plot <- relabun.bycty.df %>%
     filter(species == i) %>%
-    sample_n(size = 1000) %>%
-    ggplot() + 
-    geom_jitter(mapping = aes(x = year,
-                              y = rel_abun),
-                # alpha = 0.01,
-                height = 0.02,
-                width = 5) +
+    # sample_n(size = 1000) %>%
+    ggplot(mapping = aes(x = year,
+                         y= rel_abun,
+                         group = county)) + 
+    # geom_jitter(mapping = aes(x = year,
+    #                           y = rel_abun),
+    #             # alpha = 0.01,
+    #             height = 0.02,
+    #             width = 5) +
+    geom_smooth(method = "gam",
+                color = "black",
+                size = 0.2,
+                alpha = 0.05,
+                k = 3,
+                se = FALSE) +
     geom_smooth(mapping = aes(x = year,
                               y = rel_abun),
                 color = "tomato",
-                method = "gam") +
-    theme_minimal()
-  print(plot)
-  ggsave(paste0("./model_plots/trends/modelavg_", i, ".eps"),
-         height = 2,
-         width = 3)
+                method = "gam",
+                inherit.aes = FALSE) +
+    scale_y_continuous(limits = c(0, 1),
+                       n.breaks = 4) +
+    theme_minimal() + 
+    theme(legend.position = "none")
+    print(plot)
+    plot.list[[paste(i)]] <- plot
+  # ggsave(paste0("./model_plots/trends/modelavg_", i, ".eps"),
+  #        height = 2,
+  #        width = 3)
 }
+export.plot <- ggarrange(plotlist = plot.list,
+                         nrow = length(plot.list),
+                         common.legend = TRUE)
+ggsave("./model_plots/trends/model_avg_allspp.pdf",
+       export.plot,
+       width = 2.5,
+       height = 25)
+rm(plot.list)
+rm(export.plot)
 rm(plot.species)
 ```
 
@@ -480,4 +624,38 @@ names(cal_palettes)
 
 cal_palette(name = "seagrass", n = 8, type = "continuous")
 ```
+
+## Bombus record map
+```{r}
+study.bumbles.df <- read_csv("./data/study_bumbles.csv")
+
+study.bumbles.df %>%
+  dplyr::select(species, bin_ag, dec_lat, dec_long, state, county) %>%
+  mutate(state = tolower(state),
+         county = tolower(county)) %>%
+  ggplot() + 
+  geom_polygon(data = us.counties %>%
+                 filter(region %in% c("wisconsin",
+                                      "minnesota",
+                                      "iowa",
+                                      "michigan",
+                                      "illinois",
+                                      "indiana")),
+               mapping = aes(x = long,
+                             y = lat,
+                             group = group),
+               fill = NA,
+               color = "gray50") +
+  geom_jitter(mapping = aes(x = dec_long,
+                            y = dec_lat),
+              size = 1,
+              color = "tomato") +
+  coord_map("stereographic") +
+  facet_wrap(~ bin_ag) + 
+  theme_void() +
+  ggsave("./model_plots/maps/records.eps")
+
+table(study.bumbles.df$bin_ag)
+```
+
 

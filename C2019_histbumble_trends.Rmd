@@ -233,6 +233,7 @@ rareest.20period.plot
 
 ## 15 bins (quantile method)
 ```{r}
+library(rbin)
 bin15.bumbles.df <- rbin_quantiles(data = bumbles.df, 
                                   response = species,
                                   predictor = year,
@@ -310,7 +311,7 @@ rare.15period.df <- iNEXT(rare.bumbles.15period,
              q = 0,
              datatype = "abundance",
              knots = 200,
-             endpoint = 6000,
+             endpoint = 4000,
              nboot = 500)
 ggiNEXT(rare.15period.df,
         type = 1,
@@ -395,7 +396,46 @@ ggsave("./model_plots/diversity_trends.eps",
 rareest.15period.plot
 rareest.15period.df
 ```
+### GAM
+```{r}
+library(mgcv)
+rareest.gam.df <- rareest.15period.df %>%
+  filter(order == 0)
 
+rareest.gam <- gam(qD ~ s(year, bs = "cs", k = 5),
+                   data = rareest.gam.df)
+summary(rareest.gam)
+library(visibly)
+
+rareest.gam.plot <- plot_gam(rareest.gam, main_var = year)
+
+rarest.gam.plot.df <- ggplot_build(rareest.gam.plot)$plot$data
+
+rarest.gam.plot.df %>%
+  ggplot() + 
+  geom_pointrange(data = rareest.gam.df,
+                  mapping = aes(x = year, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  color = "black",
+                  size = 1) +
+  geom_ribbon(mapping = aes(x = value,
+                            y = fit,
+                            ymax = ll,
+                            ymin = ul),
+              alpha = 0.3,
+              fill = "tomato") +
+  geom_line(mapping = aes(x = value,
+                          y = fit),
+            color = "tomato",
+            size = 1.5) +
+  scale_y_continuous(limits = c(8, 20),
+                     breaks = seq(8, 20, by = 4)) +
+  scale_x_continuous(limits = c(1850, 2020),
+                     breaks = seq(1850, 2020, by = 20)) +
+  theme_histbumbles()
+```
 ### LM/GLM
 ```{r}
 speciestrend.lm <- lm(qD ~ year,
@@ -502,7 +542,7 @@ rare.15period.df <- iNEXT(rare.bumbles.15period,
              q = 0,
              datatype = "abundance",
              knots = 200,
-             # endpoint = 25,000,
+             endpoint = 10,000,
              nboot = 500)
 ggiNEXT(rare.15period.df,
         color.var = "site")
@@ -580,7 +620,6 @@ ggsave("./model_plots/diversity_trends.eps",
 rareest.15period.plot
 ```
 
-### LM/GLM
 
 ## 8 bins
 ```{r}

@@ -43,10 +43,10 @@ library(openintro)
 # LOAD DATA
 ## Raw data
 ```{r}
-gbif.bumbles.raw <- read_tsv("./gbif_bumbles_2018.csv",
+gbif.bumbles.raw <- read_tsv("./data/gbif_bumbles_2018.csv",
                              col_names = TRUE,
                             na = "NA")
-xerc.bumbles.raw <- read_csv("./bbw_us_5sept2018.csv",
+xerc.bumbles.raw <- read_csv("./data/bbw_us_5sept2018.csv",
                              col_names = TRUE,
                              na = "NA")
 ```
@@ -61,6 +61,8 @@ agvars.other.df <- read_csv("./data/midwest_agstats_other.csv",
                             guess_max = 5000) %>%
   dplyr::select(year, state = state_name, county = county_name, pastureac, pestac) %>%
   mutate(state_abb = state2abbr(state))
+
+midwestag.countysize.df <- read_csv("./data/midwest_countysize.csv")
 
 agvars.other.df <- agvars.other.df %>%
   left_join(midwestag.countysize.df, ###CHANGE THIS TO LEFT JOIN 
@@ -228,7 +230,7 @@ paste0("Difference of: " , diff, " records.")
 
 ## Spatial record association
 ```{r}
-census.code <- read_csv("./national_county_code.txt",
+census.code <- read_csv("./data/national_county_code.txt",
                         col_names = c("state",
                                       "statefp",
                                       "countyfp",
@@ -241,7 +243,7 @@ gbif.latlong <- tibble(gbif.bumbles$dec_long,
                        gbif.bumbles$dec_lat)
 gbif.bumble.points <- SpatialPoints(gbif.latlong)
 
-us.counties <- readOGR("./USCounties_Shapefile/", 
+us.counties <- readOGR("./data/USCounties_Shapefile/", 
                        "cb_2015_us_county_5m")
 proj4string(gbif.bumble.points) <- proj4string(us.counties)
 ```
@@ -288,6 +290,17 @@ all.bumbles.df$region <- state.abbs$region[match(as.vector(all.bumbles.df$state)
 ### Save output 
 This is the filtered, cleaned data of individual bumble bee records for lower 48
 ```{r}
+write_csv(gbif.bumbles %>%
+            mutate(state = abbr2state(state),
+                   state = tolower(state),
+                   county = tolower(county)) %>%
+            filter(state %in% c("wisconsin",
+                                "minnesota",
+                                "illinois",
+                                "michigan",
+                                "iowa",
+                                "indiana")),
+          "./data/gbif_bumbles.csv")
 write_csv(all.bumbles.df,
           "./data/all_bumbles.csv", 
           append = FALSE)
@@ -491,3 +504,48 @@ write_csv(model.3.bumbles.df,
           append = FALSE)
 ```
 
+
+
+```{r}
+bbw.clean.df <-
+  tibble(
+  unique.id = seq(from = 1, to = nrow(xerc.bumbles.raw)),
+  og_database = "bb_watch",
+  database_id_1 = xerc.bumbles.raw$`Bee Id`,
+  database_id_2 = NA,
+  database_id_3 = NA,
+  collector = xerc.bumbles.raw$Observer,
+  phylum = "Arthropoda",
+  class =  "Insecta",
+  order = "Hymenoptera",
+  family = "Apidae",
+  genus = "Bombus",
+  species = xerc.bumbles.raw$Species,
+  original_species = paste0("Bombus ", xerc.bumbles.raw$`Original Species`),
+  id_to_taxon = ifelse(is.na(xerc.bumbles.raw$Species), 
+                       "GENUS", 
+                       "SPECIES"),
+  sci_name = paste(xerc.bumbles.raw$Genus, 
+                   xerc.bumbles.raw$Species, 
+                   sep = " "),
+  country = xerc.bumbles.raw$Country,
+  state = xerc.bumbles.raw$`Provinces/States`,
+  county = NA,
+  locality = xerc.bumbles.raw$Locality,
+  dec_lat = xerc.bumbles.raw$Latitude,
+  dec_long = xerc.bumbles.raw$Longitude,
+  elevation = NA,
+  date = as.character(xerc.bumbles.raw$`Date Observed`),
+  day = NA,
+  month = NA,
+  year = NA,
+  institution_code = xerc.bumbles.raw$Project, 
+  database_notes_1 = xerc.bumbles.raw$`Floral Host`,
+  database_notes_2 = xerc.bumbles.raw$Status,
+  database_notes_3 = xerc.bumbles.raw$Private
+  ) %>%
+  write_csv("./data/bbwatch_cleaned.csv")
+
+tibble(names(bbw.clean.df)) %>%
+  write_csv("./data/bbw_metadata.csv")
+```

@@ -1,0 +1,205 @@
+---
+title: "Ch4 | Historical Ag & Bumble Bee Abundance/Community Changes"
+subtitle: "GLM model fit and visualization - surface plots"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_notebook
+---
+
+**Name:** Jeremy Hemberger
+**Email:** j.hemberger.wisc@gmail.com
+**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+# LOAD PACKAGES
+```{r}
+library(visreg)
+```
+
+Visualize predicted occurrence surface 
+
+```{r}
+list.1870 <- list()
+for (i in 1:length(models.full.list)) {
+  plot <- visreg2d(models.full.list[[i]],
+           "prop_cropland",
+           "n_crops",
+           cond = list(bin_ag = 1870),
+           scale = "response",
+           #main = names(glm.output.list[i]))
+           plot.type = "gg")
+  plot.df <- ggplot_build(plot)$plot$data # pull actual data passed to ggplot call
+  # print(plot.df)
+  plot <- plot.df %>%
+    ggplot() +
+    geom_contour_filled(mapping = aes(x = x,
+                                      y = y,
+                                      z = z),
+                        binwidth = 0.1,
+                        alpha = 0.85,
+                        color = NA) +
+    geom_contour(mapping = aes(x = x,
+                               y = y,
+                               z = z,
+                               color = after_stat(level)),
+                 binwidth = 0.1,
+                 size = 0.5) +
+    scale_fill_viridis_d(option = "inferno") +
+    scale_color_viridis_c(option = "inferno") +
+    theme_void() +
+    ylab("Number of crops") +
+    xlab("Proportion cropland") +
+    ggtitle(names(models.full.list[i]))
+  list.1870[[i]] <- plot
+  print(plot)
+}
+names(list.1870) <- species.list
+```
+
+```{r}
+list.1950 <- list()
+for (i in 1:length(models.full.list)) {
+  plot <- visreg2d(models.full.list[[i]],
+           "prop_cropland",
+           "n_crops",
+           cond = list(bin_ag = 1950),
+           scale = "response",
+           #main = names(glm.output.list[i]))
+           plot.type = "gg")
+  plot.df <- ggplot_build(plot)$plot$data # pull actual data passed to ggplot call
+  # print(plot.df)
+  plot <- plot.df %>%
+    ggplot() +
+    geom_contour_filled(mapping = aes(x = x,
+                                      y = y,
+                                      z = z),
+                        binwidth = 0.1,
+                        alpha = 0.85,
+                        color = NA) +
+    geom_contour(mapping = aes(x = x,
+                               y = y,
+                               z = z,
+                               color = after_stat(level)),
+                 binwidth = 0.1,
+                 size = 0.5) +
+    #scale_fill_manual(values = rev(rcartocolor::carto_pal(n = 9, "Burg"))) +
+    scale_fill_viridis_d(option = "inferno") +
+    scale_color_viridis_c(option = "inferno") +
+    theme_void() +
+    ylab("Number of crops") +
+    xlab("Proportion cropland") +
+    ggtitle(names(models.full.list[i]))
+  list.1950[[i]] <- plot
+  print(plot)
+}
+names(list.1950) <- species.list
+```
+
+```{r}
+list.2012 <- list()
+for (i in 1:length(models.full.list)) {
+  plot <- visreg2d(models.full.list[[i]],
+           "prop_cropland",
+           "n_crops",
+           cond = list(bin_ag = 2012),
+           scale = "response",
+           #main = names(glm.output.list[i]))
+           plot.type = "gg")
+  plot.df <- ggplot_build(plot)$plot$data # pull actual data passed to ggplot call
+  # print(plot.df)
+  plot <- plot.df %>%
+    ggplot() +
+    geom_contour_filled(mapping = aes(x = x,
+                                      y = y,
+                                      z = z),
+                        binwidth = 0.1,
+                        alpha = 0.85,
+                        color = NA) +
+    geom_contour(mapping = aes(x = x,
+                               y = y,
+                               z = z,
+                               color = after_stat(level)),
+                 binwidth = 0.1,
+                 size = 0.5) +
+    scale_fill_viridis_d(option = "inferno") +
+    scale_color_viridis_c(option = "inferno") +
+    # scale_y_continuous(limits = c(0, 15),
+    #                    breaks = seq(0, 15, 3)) +
+    # scale_x_continuous(limits = c(0, 1),
+    #                    breaks = seq(0, 1, 0.25)) +
+    theme_void() +
+    ylab("Number of crops") +
+    xlab("Proportion cropland") +
+    ggtitle(names(models.full.list[i]))
+  list.2012[[i]] <- plot
+  print(plot)
+}
+names(list.2012) <- species.list
+```
+
+# ARRANGE PLOTS
+## Plot lists
+```{r}
+surface.plot.list <- list(common_spp_1870 = list.1870[c("Bombus bimaculatus",
+                                                     "Bombus griseocollis",
+                                                     "Bombus impatiens")],
+                          common_spp_1950 = list.1950[c("Bombus bimaculatus",
+                                                     "Bombus griseocollis",
+                                                     "Bombus impatiens")],
+                          common_spp_2012 = list.2012[c("Bombus bimaculatus",
+                                                     "Bombus griseocollis",
+                                                     "Bombus impatiens")],
+                          rare_spp_1870 = list.1870[c("Bombus affinis",
+                                                   "Bombus pensylvanicus",
+                                                   "Bombus terricola")],
+                          rare_spp_1950 = list.1950[c("Bombus affinis",
+                                                   "Bombus pensylvanicus",
+                                                   "Bombus terricola")],
+                          rare_spp_2012 = list.2012[c("Bombus affinis",
+                                                   "Bombus pensylvanicus",
+                                                   "Bombus terricola")])
+```
+
+```{r}
+surface.comm.1 <- ggarrange(plotlist = surface.plot.list$common_spp_1870,
+                            nrow = length(surface.plot.list$common_spp_1870),
+                            common.legend = TRUE)
+surface.comm.2 <- ggarrange(plotlist = surface.plot.list$common_spp_1950,
+                            nrow = length(surface.plot.list$common_spp_1950),
+                            common.legend = TRUE)
+surface.comm.3 <- ggarrange(plotlist = surface.plot.list$common_spp_2012,
+                            nrow = length(surface.plot.list$common_spp_2012),
+                            common.legend = TRUE)
+
+surface.comm <- ggarrange(plotlist = list(surface.comm.1, surface.comm.2, surface.comm.3),
+                          ncol = 3,
+                          common.legend = TRUE) +
+    ggsave("./model_plots/interactions/common_spp_surface.pdf",
+         width = 5,
+         height = 5)
+surface.comm
+```
+
+
+```{r}
+surface.rare.1 <- ggarrange(plotlist = surface.plot.list$rare_spp_1870,
+                            nrow = length(surface.plot.list$rare_spp_1870),
+                            common.legend = TRUE)
+surface.rare.2 <- ggarrange(plotlist = surface.plot.list$rare_spp_1950,
+                            nrow = length(surface.plot.list$rare_spp_1950),
+                            common.legend = TRUE)
+surface.rare.3 <- ggarrange(plotlist = surface.plot.list$rare_spp_2012,
+                            nrow = length(surface.plot.list$rare_spp_2012),
+                            common.legend = TRUE)
+
+surface.rare <- ggarrange(plotlist = list(surface.rare.1, surface.rare.2, surface.rare.3),
+                          ncol = 3,
+                          common.legend = TRUE) +
+    ggsave("./model_plots/interactions/rare_spp_surface.pdf",
+         width = 5,
+         height = 5)
+```
+
+```{r}
+ggsave("./model_plots/interactions/surface_key.pdf",
+       list.1870$`Bombus terricola`)
+```
+

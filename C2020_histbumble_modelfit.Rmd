@@ -6,13 +6,17 @@ output: html_notebook
 ---
 
 **Name:** Jeremy Hemberger
-**Email:** j.hemberger.wisc@gmail.com
-**Institution:** University of Wisconsin - Madison | Department of Entomology
+
+**Email:** [j.hemberger.wisc\@gmail.com](mailto:j.hemberger.wisc@gmail.com){.email}
+
+**Institution:** University of Wisconsin - Madison \| Department of Entomology
 
 # LOAD PACKAGES
+
 ```{r}
 library(jtools)
 library(nlme)
+library(lme4)
 library(broom.mixed)
 library(interactions)
 library(janitor)
@@ -21,8 +25,8 @@ library(ggpubr)
 library(tidyverse)
 ```
 
-
 # LOAD DATA
+
 ```{r}
 model.vars.df <- read_csv("./data/model_1_bumbles.csv") %>%
   rename(bumble_abun = bumble.abun)
@@ -33,7 +37,9 @@ model.vars.3yr.df <- read_csv("./data/model_3_bumbles.csv") %>%
 ```
 
 # PREP DATA
+
 ## Species data frames
+
 ```{r}
 species.list <- as.list(unique(model.vars.df$species))
 species.df.list <- model.vars.df %>%
@@ -43,7 +49,9 @@ names(species.df.list) <- species.list
 ```
 
 # MODEL: 1870-2017
+
 ## Function: fit models
+
 ```{r}
 fit.glms <- function(data) {
   glm.df.list <- list()
@@ -55,7 +63,9 @@ fit.glms <- function(data) {
                data = model.df,
                weights = bumble_abun,
                na.action = na.exclude,
-               family = binomial(link = "logit")) 
+               # family = binomial(link = "logit"),
+               family = quasibinomial(link = "logit")
+               ) 
     glm.list[[i]] <- glm
     # glm.df <- tidy(glm) %>%
     #   mutate(n_records = nrow(model.df),
@@ -77,6 +87,7 @@ fit.glms <- function(data) {
 ```
 
 ## Function: scale and extract
+
 ```{r}
 scale_coefs <- function(model.list) {
   df.list <- list()
@@ -125,6 +136,7 @@ scale_coefs <- function(model.list) {
 ```
 
 ## Function: visualize interactions
+
 ```{r}
 plot.interx <- function(model.list) {
   plot.list <- list()
@@ -133,37 +145,71 @@ plot.interx <- function(model.list) {
   table.list <- list()
   for (i in 1:length(model.list)) {
     plot <- interactions::interact_plot(model.list[[i]],
-                                        pred = bin_ag,
+                                        pred = prop_cropland,
                                         modx = n_crops,
-                                        mod2 = prop_cropland,
+                                        mod2 = bin_ag,
                                         outcome.scale = "response",
                                         interval = TRUE,
-                                        x.label = "Year",
+                                        # x.label = "Year",
+                                        x.label = "Proportion agriculture",
                                         y.label = "Probability of occurrence",
-                                        modx.labels = c("Mean crops - 1 S.D.",
-                                                        "Mean crops",
-                                                        "Mean crops + 1 S.D."),
-                                        mod2.labels = c("Mean cropland - 1 S.D.",
-                                                        "Mean cropland",
-                                                        "Mean cropland + 1 S.D.")) +
-      
-      scale_y_continuous(limits = c(0, 1),
+                                        mod2.values = c(1870, 1950, 2017),
+                                        modx.values = c(5, 10, 15),
+                                        modx.labels = c("5", "10", "15"), 
+                                        # modx.labels = c("Mean crops - 1 S.D.",
+                                        #                 "Mean crops",
+                                        #                 "Mean crops + 1 S.D."),
+                                        mod2.labels = c("1870",
+                                                        "1900",
+                                                        "2012"))
+    plot.df <- ggplot_build(plot)$plot$data
+    
+    plot <- plot.df %>%
+      # mutate(modx_group = factor(modx_group,
+      #                            levels = c("Mean crops",
+      #                                       "Mean crops - 1 S.D.",
+      #                                       "Mean crops + 1 S.D."))) %>%
+      mutate(modx_group = factor(modx_group,
+                                 levels = c(5, 10, 15))) %>%
+      ggplot() + 
+      geom_ribbon(mapping = aes(x = prop_cropland,
+                                y = rel_abun,
+                                ymax = ymax,
+                                ymin = ymin,
+                                fill = modx_group),
+                  alpha = 0.2) +
+      geom_line(mapping = aes(x = prop_cropland,
+                              y = rel_abun,
+                              color = modx_group,
+                              linetype = modx_group),
+                size = 1.5) +
+      scale_color_manual(values = c("#000000",
+                                    "#CC3333",
+                                    "#669966")) +
+      scale_fill_manual(values = c("#000000",
+                                    "#CC3333",
+                                    "#669966")) +
+      # scale_y_continuous(limits = c(0, 1),
+      #                    breaks = seq(0, 1, by = 0.25)) +
+      scale_x_continuous(limits = c(0, 1),
                          breaks = seq(0, 1, by = 0.25)) +
-      scale_x_continuous(limits = c(1880, 2020),
-                         breaks = seq(1880, 2020, by = 40))
-      theme_nice() + 
-      theme(legend.position = "none")
+      facet_wrap(~ bin_ag, scales = "free") +
+      theme_nice()
       slope.test <- interactions::sim_slopes(model.list[[i]],
-                                             pred = bin_ag,
+                                             pred = prop_cropland,
                                              modx = n_crops,
-                                             mod2 = prop_cropland,
+                                             mod2 = bin_ag,
                                              interval = TRUE,
+                                             mod2.values = c(1870, 1950, 2017),
                                              modx.labels = c("Mean crops - 1 S.D.",
                                                              "Mean crops",
                                                              "Mean crops + 1 S.D."),
-                                             mod2.labels = c("Mean cropland - 1 S.D.",
-                                                             "Mean cropland",
-                                                             "Mean cropland + 1 S.D."))
+                                             mod2.labels = c("1870",
+                                                             "1950",
+                                                             "2012"))
+                                             # mod2.labels = c("Mean cropland - 1 S.D.",
+                                             #                 "Mean cropland",
+                                             #                 "Mean cropland + 1 S.D."))
     slope.plot <- plot(slope.test)
     slope.table <- as_huxtable(slope.test)
     
@@ -186,7 +232,9 @@ plot.interx <- function(model.list) {
 ```
 
 ## Run Models
+
 #### Fit
+
 ```{r}
 models.full.list <- fit.glms(data = model.vars.df)
 models.uniq.list <- fit.glms(data = model.vars.uniq.df)
@@ -194,6 +242,7 @@ models.3yr.list <- fit.glms(data = model.vars.df)
 ```
 
 #### Scale and extract
+
 ```{r}
 scaled.models.full.list <- scale_coefs(models.full.list)
 scaled.model.uniq.list <- scale_coefs(models.uniq.list)
@@ -201,17 +250,296 @@ scaled.model.3yr.list <- scale_coefs(models.3yr.list)
 ```
 
 #### Visualize interactions
+
 ```{r}
 interactions.full.list <- plot.interx(models.full.list)
 interactions.uniq.list <- plot.interx(models.uniq.list)
 interactions.3yr.list <- plot.interx(models.3yr.list)
 ```
 
+
+# SPATIAL MODELS
+## Create spdf
+```{r}
+us.spdf <- raster::getData('GADM', 
+                           country = 'USA', 
+                           level = 2)
+midwest.spdf <- subset(us.spdf, 
+                       NAME_1 == "Iowa" | NAME_1 == "Illinois" | NAME_1 == "Indiana" |
+                         NAME_1 == "Michigan" | NAME_1 == "Minnesota" | NAME_1 == "Wisconsin")
+countycode.df <- tibble(GID_2 = midwest.spdf@data[["GID_2"]],
+                        state = midwest.spdf@data[["NAME_1"]],
+                        county_name = midwest.spdf@data[["NAME_2"]])
+
+spatial.corr.test.df <- model.vars.df %>%
+  left_join(countycode.df,
+            by = c("state" = "state",
+                   "county" = "county_name"))
+spatial.corr.test.spdf <- sp::merge(midwest.spdf,
+                                    spatial.corr.test.df,
+                                    by = "GID_2",
+                                    duplicateGeoms = TRUE)
+
+table(spatial.corr.test.spdf@data$species)
+```
+
+## Test for spatial autocorrelation 
+```{r}
+spatial.autocorr.test <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species)) %>%
+    filter(!is.na(prop_cropland))
+  spp.test.yr.df <- spatial.corr.test.df %>%
+    group_by(species, bin_ag) %>%
+    summarise(n_counties = n()) %>%
+    filter(n_counties == max(n_counties),
+           !species %in% c("Bombus ashtoni",
+                           "Bombus fraternus",
+                           "Bombus variabilis"))
+  species <- c("Bombus affinis",
+               "Bombus auricomus",
+               "Bombus bimaculatus",
+               "Bombus borealis",
+               "Bombus citrinus",
+               "Bombus fervidus",
+               "Bombus griseocollis",
+               "Bombus impatiens",
+               "Bombus pensylvanicus",
+               "Bombus rufocinctus",
+               "Bombus ternarius",
+               "Bombus terricola",
+               "Bombus vagans")
+  iter <- 0
+  for (i in species) {
+    iter <- iter + 1
+    bin_ag_max <- spp.test.yr.df$bin_ag[spp.test.yr.df$species == i]
+    model.spdf <- analysis.spdf %>%
+      filter(species == i) %>%
+      filter(bin_ag == bin_ag_max)
+    spdf.list[[iter]] <- model.spdf
+  }
+  names(spdf.list) <- species
+  assign("spatial.autocorr.spdf.list",
+         spdf.list,
+         envir = .GlobalEnv)
+  
+  listnumber = 0
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  for (i in spdf.list) {
+    listnumber <- listnumber + 1
+    # OLS Model
+    glm.model <- glm(rel_abun ~ scale(n_crops) * scale(prop_cropland) * scale(bin_ag),
+                     data = i@data,
+                     weights = i@data$bumble_abun,
+                     na.action = na.exclude)
+    glm.df <- tidy(glm.model) %>%
+      mutate(model.type = "GLM",
+             species = i@data$species[1],
+             time = i@data$bin_ag[1],
+             sample.size = nrow(i@data),
+             moran.pvalue = NA) %>%
+      dplyr::select(species, time, sample.size, model.type, moran.pvalue, everything())
+    modeloutput.list[[listnumber]] <- glm.model
+    # print(paste("n residuals:", length(resid(glm.model)), sep = " "))
+    # Create spatial weights matrix
+    neighbors <- poly2nb(i,
+                         queen = TRUE)
+    # print(paste("n neighbors", length(neighbors), sep = " "))
+    weights <- nb2listw(neighbors,
+                        # style = "W",
+                        zero.policy = TRUE)
+    moran.test <- lm.morantest(glm.model,
+                               weights,
+                               alternative = "two.sided",
+                               zero.policy = TRUE)
+    moran.pvalue <- moran.test$p.value[1, 1]
+    glm.df$moran.pvalue = moran.pvalue
+    modelresults.list[[listnumber]] <- glm.df
+  }
+  spatial.corr.df <- bind_rows(modelresults.list)
+}
+
+autocorr.spp.df <- spatial.autocorr.test(spatial.corr.test.spdf)
+```
+
+## Run spatial models
+```{r}
+spatial.corr.models <- function(spdf) {
+  analysis.spdf <- spdf %>%
+    filter(!is.na(species))
+  spatial.test.list <- list()
+  spdf.list <- list()
+  species <- c("Bombus affinis",
+               "Bombus impatiens",
+               "Bombus ternarius",
+               "Bombus vagans")
+  for (i in species) {
+    model.spdf <- analysis.spdf %>%
+      filter(species == i) %>%
+      filter(!is.na(prop_cropland) &
+               !is.na(n_crops) &
+               !is.na(rel_abun))
+    spdf.list[[i]] <- model.spdf
+    # assign("test.list",
+    #        spdf.list,
+    #        envir = .GlobalEnv)
+  }
+  listnumber <- 0
+  modelresults.list <- list()
+  modeloutput.list <- list()
+  sma.results.list <- list()
+  sma.models.list <- list()
+  predict.list <- list()
+  predict.glm.list <- list()
+  for (i in spdf.list) {
+    listnumber <- listnumber + 1
+    glm.model <- glm(rel_abun ~
+                       scale(n_crops) * scale(prop_cropland) * scale(bin_ag),
+                     data = i@data,
+                     weights = i@data$bumble_abun,
+                     family = binomial(link = "logit"),
+                     na.action = na.exclude)
+    glm.df <- tidy(glm.model) %>%
+      mutate(model.type = "glm",
+             species = i@data$species[1],
+             obsv = nrow(i@data)) %>%
+      dplyr::select(species, model.type, obsv, everything())
+    # residuals(ols.model)
+    modeloutput.list[[listnumber]] <- glm.model
+    weights.queen.list <- poly2nb(i,
+                                  queen = TRUE)
+    # print(length(weights.queen.list))
+    # print(length(ols.model$residuals))
+    # acf(residuals(ols.model))
+    weights <- nb2listw(weights.queen.list,
+                        style = "W",
+                        zero.policy = TRUE)
+    # plot(weights, coordinates(i))
+    moran.test <- lm.morantest(glm.model,
+                               weights,
+                               alternative = "two.sided",
+                               zero.policy = TRUE)
+    moran.pvalue <- moran.test$p.value[1, 1]
+    # print(moran.test)
+    glm.df <- glm.df %>%
+      mutate(moran_pvalue = moran.test$p.value)
+    modelresults.list[[listnumber]] <- glm.df
+    fit.sma <- errorsarlm(rel_abun ~
+                            scale(n_crops) * scale(prop_cropland) * scale(bin_ag),
+                          data = i,
+                          weights = bumble_abun,
+                          listw = weights,
+                          zero.policy = TRUE,
+                          na.action = na.omit)
+    print(summary(fit.sma))
+    sma.models.list[[listnumber]] <- fit.sma
+    sma.model.df <- tibble(term = c("(Intercept)",
+                                    "n_crops",
+                                    "prop_cropland",
+                                    "bin_ag",
+                                    "n_crops:bin_ag",
+                                    "prop_cropland:bin_ag",
+                                    "n_crops:prop_cropland",
+                                    "n_crops:prop_cropland:bin_ag"),
+                           estimate = (summary(fit.sma)$Coef[, 1]),
+                           std.error = (summary(fit.sma)$Coef[, 2]),
+                           statistic = (summary(fit.sma)$Coef[, 3]),
+                           p.value = (summary(fit.sma)$Coef[, 4])) %>%
+      mutate(model.type = "spatial.error",
+             species = i@data$species[1],
+             sample.size = nrow(i@data)) %>%
+      mutate(moran_pvalue = moran.test$p.value) %>%
+      left_join(as_tibble(confint(fit.sma)) %>%
+                  mutate(term = c("lamda",
+                                  "(Intercept)",
+                                  "n_crops",
+                                  "prop_cropland",
+                                  "bin_ag",
+                                  "n_crops:bin_ag",
+                                  "prop_cropland:bin_ag",
+                                  "n_crops:prop_cropland",
+                                  "n_crops:prop_cropland:bin_ag"
+                  )) %>%
+                  dplyr::select(term, lower.ci = `2.5 %`, upper.ci = `97.5 %`),
+                by = c("term" = "term")) %>%
+      dplyr::select(species,
+                    model.type,
+                    sample.size,
+                    moran_pvalue,
+                    term,
+                    estimate,
+                    lower.ci,
+                    upper.ci,
+                    z.stat = statistic,
+                    p.value)
+    print(sma.model.df)
+    sma.results.list[[listnumber]] <- sma.model.df
+    predict.df <- predict(fit.sma,
+                          newdata = i,
+                          listw = weights,
+                          all.data = TRUE)
+    predict.df$species <- i@data$species[1]
+    predict.glm.df <- predict(glm.model,
+                              newdata = i,
+                              type = "response")
+    predict.glm.list[[listnumber]] <- predict.glm.df
+    predict.list[[listnumber]] <- predict.df
+  }
+  # sma.predict.df <- bind_rows(predict.list)
+  glm.results.df <- bind_rows(modelresults.list)
+  sma.results.df <- bind_rows(sma.results.list)
+  assign("sma.predict.list",
+         predict.list,
+         envir = .GlobalEnv)
+  assign("glm.predict.list",
+         predict.glm.list,
+         envir = .GlobalEnv)
+  assign("glm.spatialauto.df",
+         glm.results.df,
+         envir = .GlobalEnv)
+  assign("sma.spatialauto.df",
+         sma.results.df,
+         envir = .GlobalEnv)
+  assign("sma.models.list",
+         sma.models.list,
+         envir = .GlobalEnv)
+}
+
+spatial.corr.models(spatial.corr.test.spdf)
+```
+
+## Prediction differences
+```{r}
+spatial.prediction.diff <- function() {
+  species <- c("Bombus affinis",
+               "Bombus impatiens",
+               "Bombus ternarius",
+               "Bombus vagans")
+  df.list <- list()
+  for (i in 1:length(sma.predict.list)) {
+    df <- tibble(spatial.model = unlist(sma.predict.list[[i]])) %>%
+      filter(!str_detect(spatial.model, 'Bombus')) %>%
+      mutate(spatial.model = as.numeric(spatial.model)) %>%
+      bind_cols(tibble(glm.model = unlist(glm.predict.list[[i]]))) %>%
+      mutate(est.diff = spatial.model - glm.model,
+             species = species[i])
+    df.list[[i]] <- df
+  }
+  final.df <- bind_rows(df.list)
+}
+
+model.dif.df <- spatial.prediction.diff()
+hist(model.dif.df$est.diff)
+```
+
 # MODEL: 1982-2012
+
 ## Function: fit models
+
 ```{r}
 fit.1982.glms <- function(data) {
-  species.list <- list(#"Bombus affinis", 
+  species.list <- list("Bombus affinis", 
                        "Bombus bimaculatus",
                        "Bombus griseocollis",
                        "Bombus impatiens",
@@ -222,17 +550,10 @@ fit.1982.glms <- function(data) {
   for (i in 1:length(species.list)) {
     model.df <- data %>%
       filter(species == species.list[[i]])
-    glm <- glm(rel_abun ~ n_crops + 
-                       prop_pasture + 
-                       prop_pest + 
-                       bin_ag +
-                       prop_pasture:bin_ag +
-                       prop_pest:bin_ag +
-                       n_crops:bin_ag +
-                       n_crops:prop_pest +
-                       n_crops:prop_pasture +
-                       prop_pest:prop_pasture +
-                 prop_pest:prop_pasture:bin_ag:n_crops,
+    glm <- glm(rel_abun ~ scale(n_crops) * 
+                       scale(prop_pasture) * 
+                       scale(prop_pest) * 
+                       scale(bin_ag),
                data = model.df,
                weights = bumble_abun,
                na.action = na.exclude,
@@ -258,6 +579,7 @@ fit.1982.glms <- function(data) {
 ```
 
 ## Function: scale and extract
+
 ```{r}
 scale.1982.coefs <- function(model.list) {
   df.list <- list()
@@ -311,6 +633,7 @@ models.1982.full.list[[1]]
 ```
 
 ## Function: visualize interactions
+
 ```{r}
 plot.1982.interx <- function(model.list) {
   plot.list <- list()
@@ -359,7 +682,9 @@ plot.1982.interx <- function(model.list) {
 ```
 
 ## Run Models
+
 #### Fit
+
 ```{r}
 models.1982.full.list <- fit.1982.glms(data = model.vars.df)
 models.1982.uniq.list <- fit.1982.glms(data = model.vars.uniq.df)
@@ -367,6 +692,7 @@ models.1982.3yr.list <- fit.1982.glms(data = model.vars.df)
 ```
 
 #### Scale and extract
+
 ```{r}
 scaled.1982.models.full.list <- scale.1982.coefs(models.1982.full.list)
 scaled.1982.model.uniq.list <- scale.1982.coefs(models.1982.uniq.list)
@@ -374,14 +700,17 @@ scaled.1982.model.3yr.list <- scale.1982.coefs(models.1982.3yr.list)
 ```
 
 #### Visualize interactions
+
 ```{r}
 interactions.1982.full.list <- plot.1982.interx(models.1982.full.list)
 interactions.1982.uniq.list <- plot.interx(models.1982.uniq.list)
 interactions.1982.3yr.list <- plot.interx(models.1982.3yr.list)
 ```
 
+
 # EXPORT INTERACTION FIGURES
 ## Plot stack function
+
 ```{r}
 export.plots <- function(plots, species, export.name) {
   print(export.name)
@@ -396,7 +725,9 @@ export.plots <- function(plots, species, export.name) {
 ```
 
 ## Species groups
+
 ### Interaction plots
+
 ```{r}
 full.model.intx.spp <- list(
   common.spp = interactions.full.list$plots[c("Bombus bimaculatus",
@@ -441,6 +772,7 @@ full.model.intx.spp <- list(
 ```
 
 ### Interaction sig. plots
+
 ```{r}
 full.model.slope.spp <- list(
   common.spp = interactions.full.list$slopes[c("Bombus bimaculatus",
@@ -484,9 +816,10 @@ full.model.slope.spp <- list(
                                                  "Bombus vagans")])
 ```
 
-
 ## Full
+
 ### Common species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$common.spp,
           nrow = length(full.model.intx.spp$common.spp),
@@ -497,6 +830,7 @@ ggarrange(plotlist = full.model.intx.spp$common.spp,
 ```
 
 ### Consv. species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$consv.spp,
           nrow = length(full.model.intx.spp$consv.spp),
@@ -507,17 +841,21 @@ ggarrange(plotlist = full.model.intx.spp$consv.spp,
 ```
 
 ### Other species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$other.spp,
           nrow = length(full.model.intx.spp$other.spp),
           common.legend = TRUE) +
+  facet_wrap(~ ., scales = "free") +
   ggsave("./model_plots/interactions/1870_other_spp.pdf",
          width = 6,
          height = 14)
 ```
 
 ## Filtered
+
 ### Common species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$common.uniq.spp,
           nrow = length(full.model.intx.spp$common.uniq.spp),
@@ -528,6 +866,7 @@ ggarrange(plotlist = full.model.intx.spp$common.uniq.spp,
 ```
 
 ### Consv. species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$consv.uniq.spp,
           nrow = length(full.model.intx.spp$consv.uniq.spp),
@@ -538,6 +877,7 @@ ggarrange(plotlist = full.model.intx.spp$consv.uniq.spp,
 ```
 
 ### Other species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$other.uniq.spp,
           nrow = length(full.model.intx.spp$other.uniq.spp),
@@ -548,7 +888,9 @@ ggarrange(plotlist = full.model.intx.spp$other.uniq.spp,
 ```
 
 ## `bin_ag` windows
+
 ### Common species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$common.3yr.spp,
           nrow = length(full.model.intx.spp$common.3yr.spp),
@@ -559,6 +901,7 @@ ggarrange(plotlist = full.model.intx.spp$common.3yr.spp,
 ```
 
 ### Consv. species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$consv.3yr.spp,
           nrow = length(full.model.intx.spp$consv.3yr.spp),
@@ -569,6 +912,7 @@ ggarrange(plotlist = full.model.intx.spp$consv.3yr.spp,
 ```
 
 ### Other species
+
 ```{r}
 ggarrange(plotlist = full.model.intx.spp$other.3yr.spp,
           nrow = length(full.model.intx.spp$other.3yr.spp),
@@ -579,7 +923,9 @@ ggarrange(plotlist = full.model.intx.spp$other.3yr.spp,
 ```
 
 # EXPORT SLOPE INFO
+
 ## Common species
+
 ```{r}
 ggarrange(plotlist = full.model.slope.spp$common.spp,
           nrow = 1) +
@@ -589,6 +935,7 @@ ggarrange(plotlist = full.model.slope.spp$common.spp,
 ```
 
 ## Consv. species
+
 ```{r}
 ggarrange(plotlist = full.model.slope.spp$consv.spp,
           nrow = 1) +
@@ -598,6 +945,7 @@ ggarrange(plotlist = full.model.slope.spp$consv.spp,
 ```
 
 ## Other species
+
 ```{r}
 ggarrange(plotlist = full.model.slope.spp$other.spp,
           nrow = 1,
@@ -617,8 +965,63 @@ for (i in 1:length(interactions.full.list$slope.tests)) {
 ```
 
 # EXPORT MODEL TABLES
+
 ```{r}
 scaled.models.full.list$scaled.glms.df %>%
   write_csv("./model_output/1870_full_model.csv")
+```
+
+# TEST NO XERC DATA
+```{r}
+model.vars.noxerx.df <- read_csv("./data/gbif_bumbles.csv") %>%
+  
+```
+
+# GLOBAL MODEL
+```{r}
+model.vars.df %>%
+  group_by(species) %>%
+  count()
+
+global.glm <- glmer(rel_abun ~ 
+                      scale(n_crops) * 
+                      scale(prop_cropland) * 
+                      scale(bin_ag) + 
+                      (1|species) +
+                      (1|state) + 
+                      (1|county),
+                    data = model.vars.df,
+                    weights = bumble_abun,
+                    family = binomial(link = "logit"),
+                    control = glmerControl(optimizer = "bobyqa",
+                                 optCtrl = list(maxfun = 2e5)))
+summary(global.glm)
+
+interact_plot(global.glm,
+              # pred = bin_ag,
+              pred = prop_cropland,
+              modx = n_crops,
+              # mod2 = prop_cropland,
+              mod2 = bin_ag,
+              data = model.vars.df,
+              mod2.values = c(1870, 1900, 1950, 1982, 2017),
+              # mod2.values = c(0.1, 0.5, 0.9),
+              outcome.scale = "response",
+              interval = TRUE,
+              x.label = "Year",
+              y.label = "Probability of occurrence")
+
+
+interact_plot(global.glm,
+              pred = bin_ag,
+              modx = n_crops,
+              mod2 = prop_cropland,
+              data = model.vars.df,
+              mod2.values = c(0.1, 0.5, 0.9),
+              outcome.scale = "response",
+              interval = TRUE,
+              x.label = "Year",
+              y.label = "Probability of occurrence")
+                      
 ```
 

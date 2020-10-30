@@ -1,0 +1,167 @@
+
+# LOAD PACKAGES
+```{r}
+library(binr)
+library(tidyverse)
+library(iNEXT)
+```
+
+# LOAD DATA
+```{r}
+study.bumbles.df <- read_csv("./data/study_bumbles.csv", guess_max = 10000)
+```
+
+# BIN DATA
+```{r}
+rareest.df <- bumbles.df %>% #bumbles.df includes all possible species in this region 
+  # (not just 13 selected for analysis)
+  mutate(bin = cut_number(year, n = 12)) %>%
+  select(species, year, bin) %>%
+  group_by(species, bin) %>%
+  summarise(n = n()) %>%
+  pivot_wider(names_from = bin, values_from = n) %>%
+  replace(is.na(.), 0) %>%
+  column_to_rownames(var = "species")
+```
+# RAREFACTION
+## Build rarefaction
+```{r}
+rarefy.df <- iNEXT(rareest.df %>%
+                     ungroup() %>%
+                     as.matrix(), 
+                   q = 0,
+                   datatype = "abundance",
+                   knots = 200,
+                   endpoint = 4000,
+                   nboot = 500)
+```
+
+## Plot accumulation curves
+```{r}
+ggiNEXT(rarefy.df,
+        type = 1,
+        color.var = "site") + 
+  theme_histbumbles() + 
+  # theme(legend.position = "none") +
+  scale_color_viridis_d(option = "inferno") +
+  ggsave("./model_plots/specaccurve.eps",
+         width = 5,
+         height = 3)
+
+ggiNEXT(rarefy.df,
+        type = 3,
+        color.var = "site") + 
+  theme_histbumbles() + 
+  # theme(legend.position = "none") +
+  scale_color_viridis_d(option = "inferno")
+```
+
+## Estimate species richness
+```{r}
+# Create year bins to append
+rare.periods.df <- tibble(period = colnames(rareest.df)) %>%
+  mutate(period = str_replace_all(period, "\\*|\\(|\\)|\\[|\\]", "")) %>%
+  separate(period, into = c("begin", "end")) %>%
+  mutate(end = as.numeric(end),
+         begin = as.numeric(begin),
+         year = (end + begin) / 2)
+
+est.rich.df <- estimateD(rareest.df %>%
+                           ungroup() %>%
+                           as.matrix(),
+                         datatype = "abundance",
+                         base = "coverage",
+                         level = 0.985,
+                         conf = 0.95) %>%
+  filter(order == 0) %>%
+  bind_cols(year = rare.periods.df$year)
+
+```
+
+### GAM
+```{r}
+library(mgcv)
+rareest.gam <- gam(qD ~ s(year, bs = "cs", k = 4),
+                   data = est.rich.df)
+summary(rareest.gam)
+library(visibly)
+
+rareest.gam.plot <- plot_gam(rareest.gam, main_var = year)
+
+rarest.gam.plot.df <- ggplot_build(rareest.gam.plot)$plot$data
+```
+
+### Permuatation test
+```{r}
+set.seed(124)
+perm.test <- function(data, n.perm) {
+  true.lm <- lm(qD ~ year,
+                data = est.rich.df)
+  true.r2 <- summary(true.lm)$r.squared
+  x <- seq(1, n.perm, 1)
+  rsq <- list()
+  order <- list()
+  for (i in x) {
+    rand.data.df <- data.frame(data[sample(nrow(data)),])
+    rand.data.df$time <- seq.int(nrow(rand.data.df))
+    lm <- lm(qD ~ time,
+             data = rand.data.df)
+    rsq[[i]] <- data.frame(summary(lm)$r.squared)
+    order[[i]] <- data.frame(toString(c(rand.data.df$site)))
+  }
+  rsq.df <- bind_rows(rsq)
+  colnames(rsq.df) <- "r2"
+  order.df <- bind_rows(order)
+  colnames(order.df) <- "year_order"
+  permresults.df <- bind_cols(rsq.df, 
+                              order.df)
+  p.prop <- permresults.df %>%
+    summarise(p.prop = sum(r2 > true.r2))
+  p.value <- p.prop / nrow(permresults.df)
+  assign("permtest.df",
+         permresults.df,
+         envir = .GlobalEnv)
+  print(paste("p-value:",
+              p.value))
+}
+perm.test(est.rich.df, n.perm = 1000)
+```
+
+### Plot
+```{r}
+rarest.gam.plot.df %>%
+  ggplot() + 
+  geom_pointrange(data = est.rich.df,
+                  mapping = aes(x = year, 
+                                y = qD,
+                                ymin = qD.LCL,
+                                ymax = qD.UCL),
+                  color = "black",
+                  size = 1) +
+  geom_ribbon(mapping = aes(x = value,
+                            y = fit,
+                            ymax = ll,
+                            ymin = ul),
+              alpha = 0.3,
+              fill = "tomato") +
+  geom_line(mapping = aes(x = value,
+                          y = fit),
+            color = "tomato",
+            size = 1.5) +
+  geom_rug(data = study.bumbles.df %>%
+             mutate(qD = 5),
+           mapping = aes(x = year,
+                         y = qD),
+           sides = "b",
+           position = "jitter",
+           alpha = 0.05) +
+  scale_y_continuous(limits = c(5, 20),
+                     breaks = seq(5, 20, by = 5)) +
+  scale_x_continuous(limits = c(1850, 2020),
+                     breaks = seq(1850, 2020, by = 20)) +
+  theme_histbumbles() +
+  ggsave("./model_plots/diversity_trends_12.pdf",
+         width = 4,
+         height = 3)
+```
+
